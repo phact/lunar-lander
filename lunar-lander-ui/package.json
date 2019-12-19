@@ -1,0 +1,20 @@
+{
+  "name": "lunar-lander-ui",
+  "version": "1.0.0",
+  "description": "UI for DataStax lunar lander",
+  "author": "phact",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt",
+    "build": "nuxt build",
+    "start": "nuxt start",
+    "generate": "nuxt generate"
+  },
+  "dependencies": {
+    "axios": "^0.19.0",
+    "nuxt": "^2.0.0"
+  },
+  "devDependencies": {
+    "@nuxtjs/vuetify": "^1.0.0"
+  }
+}
