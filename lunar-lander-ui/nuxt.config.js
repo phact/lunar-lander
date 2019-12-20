@@ -74,6 +74,7 @@ export default {
     }
   },
   generate: {
-    dir: '../src/main/resources/META-INF/resources/'
-  }
+    dir: '../src/main/resources/META-INF/resources/',
+    devtools: true
+  },
 }

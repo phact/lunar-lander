@@ -1,0 +1,90 @@
+package com.datastax.powertools.cassandra;
+
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.metadata.Node;
+import com.datastax.powertools.api.CassandraNode;
+import org.jboss.logging.Logger;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import java.net.InetSocketAddress;
+import java.security.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+public class CassandraManager {
+
+    private CqlSession session;
+    private Logger logger = Logger.getLogger(CassandraManager.class);
+
+
+    public List connect(CassandraConfiguration config) {
+        CqlSessionBuilder builder = CqlSession.builder();
+        builder = builder.addContactPoint(InetSocketAddress.createUnresolved(
+                config.getContactPoints(),
+                config.getCqlPort()));
+
+        if (config.getCqlUserName() != null) {
+            builder = builder.withAuthCredentials(config.getCqlUserName(), config.getCqlPassword());
+        }
+        if (config.getLocalDC() != null) {
+            builder = builder.withLocalDatacenter(config.getLocalDC());
+        }
+        if (config.getSslKsPass() != null && config.getSslKsPath() != null) {
+            builder = builder.withSslContext(createSSLOptions(config.getSslTsPath(), config.getSslTsPass(), config.getSslKsPath(), config.getSslKsPass()));
+
+            logger.info("Enabling SSL with sskKsPath=" + config.getSslKsPath());
+            throw new NotImplementedException();
+        }
+
+        session = builder.build();
+
+        Map<UUID, Node> nodes = session.getMetadata().getNodes();
+        List cassandraNodeList = new ArrayList();
+        for (Node node: nodes.values()) {
+            CassandraNode cassandraNode = new CassandraNode();
+            cassandraNode.setListenAddress(node.getListenAddress());
+            cassandraNode.setBroadcastAddress(node.getBroadcastAddress());
+            cassandraNode.setBroadcastRpcAddress(node.getBroadcastRpcAddress());
+            cassandraNodeList.add(cassandraNode);
+        }
+        return cassandraNodeList;
+    }
+
+    private SSLContext createSSLOptions(String truststorePath, String truststorePwd, String keystorePath, String keystorePwd) {
+        try {
+            TrustManagerFactory tmf = null;
+        if (null != truststorePath) {
+            KeyStore tks = null;
+                tks = KeyStore.getInstance("JKS");
+            tks.load(this.getClass().getResourceAsStream(truststorePath),
+                    truststorePwd.toCharArray());
+            tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(tks);
+        }
+        KeyManagerFactory kmf = null;
+        if (null != keystorePath) {
+            KeyStore kks = KeyStore.getInstance("JKS");
+            kks.load(this.getClass().getResourceAsStream(keystorePath),
+                    keystorePwd.toCharArray());
+            kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(kks, keystorePwd.toCharArray());
+        }
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(kmf != null? kmf.getKeyManagers() : null,
+                tmf != null ? tmf.getTrustManagers() : null,
+                new SecureRandom());
+        return sslContext;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+    }
+}
+
