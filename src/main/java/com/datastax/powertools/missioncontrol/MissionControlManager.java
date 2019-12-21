@@ -83,10 +83,10 @@ public class MissionControlManager {
 
             String expectedResponse = sequence.getExpectedResponse();
 
-            if (sequence.getType() == null){
+            if (sequence.getSequenceType() == null){
                 throw new RuntimeException("Sequence has no type");
             }
-            LanderSequence.SequenceType sequenceType = sequence.getType();
+            LanderSequence.SequenceType sequenceType = sequence.getSequenceType();
 
             //TODO: think about if and how to do retries (idempotent flag on the sequence?)
             //TODO: use mustache to include node variables
@@ -120,6 +120,9 @@ public class MissionControlManager {
     //Note: currently each command is a separate ssh session
     private boolean sshAll(List<String> commands, List<CassandraNode> cluster) {
         List<Integer> exitStatuses = new ArrayList<>();
+        if (cluster == null){
+            throw new RuntimeException("No cluster has been connected");
+        }
         for (CassandraNode node : cluster) {
             for (String command : commands) {
                 //TODO: allow optional usage of listen address for ssh

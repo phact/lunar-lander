@@ -193,3 +193,4 @@ yarn-debug.log*
 yarn-error.log*
 .yarn-integrity
 # Yarn Integrity file
+src/main/resources/META-INF/resources/*

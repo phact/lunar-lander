@@ -84,7 +84,7 @@
         v-model="missionName"
         outlined
       ></v-select>
-      <v-btn v-if="cassandraNodes.length > 0" v-on:click="initiateSequence()">Initiate Sequence</v-btn>
+      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="initiateSequence()">Initiate Sequence</v-btn>
 
       </v-card-text>
    </v-card>
