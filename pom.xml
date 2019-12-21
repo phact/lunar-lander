@@ -63,6 +63,16 @@
       <artifactId>java-driver-query-builder</artifactId>
       <version>4.3.1</version>
     </dependency>
+    <dependency>
+      <groupId>com.jcraft</groupId>
+      <artifactId>jsch</artifactId>
+      <version>0.1.55</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk15on</artifactId>
+      <version>1.63</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

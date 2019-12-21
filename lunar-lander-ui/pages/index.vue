@@ -12,6 +12,12 @@
       <div class="text-center">
         <logo />
       </div>
+    </v-flex>
+    <v-flex
+      xs12
+      sm8
+      md6
+    >
       <v-card>
         <v-card-title class="headline">
           DataStax Lunar Lander
@@ -24,7 +30,7 @@
           <v-btn
             color="primary"
             nuxt
-            to="/connect"
+            to="/mc"
           >
             Continue
           </v-btn>

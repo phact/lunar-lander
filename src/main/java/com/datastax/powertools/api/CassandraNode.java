@@ -8,6 +8,8 @@ public class CassandraNode {
     private Optional<InetSocketAddress> broadcastRpcAddress;
     private Optional<InetSocketAddress> broadcastAddress;
     private Optional<InetSocketAddress> listenAddress;
+    private String privateKey;
+    private String user;
 
     public void setBroadcastRpcAddress(Optional<InetSocketAddress> broadcastRpcAddress) {
         this.broadcastRpcAddress = broadcastRpcAddress;
@@ -31,5 +33,13 @@ public class CassandraNode {
 
     public Optional<InetSocketAddress> getBroadcastRpcAddress() {
         return broadcastRpcAddress;
+    }
+
+    public String getPrivateKey() {
+        return privateKey;
+    }
+
+    public String getUser() {
+        return user;
     }
 }

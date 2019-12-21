@@ -7,6 +7,7 @@ import com.datastax.powertools.api.CassandraNode;
 import org.jboss.logging.Logger;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@ApplicationScoped
 public class CassandraManager {
 
     private CqlSession session;

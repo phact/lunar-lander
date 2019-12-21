@@ -24,9 +24,9 @@
   overflow: hidden;
   background-image: linear-gradient(to bottom, #211c17, #080707);
   background-size: 100% 100%;
-  border-left: 3vw solid transparent;
-  border-right: 3vw solid transparent;
-  border-bottom: 12vw solid gray;
+  border-left: 50px solid transparent;
+  border-right: 50px solid transparent;
+  border-bottom: 100px solid gray;
   height:0
 }
   

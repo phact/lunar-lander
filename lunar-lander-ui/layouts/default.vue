@@ -97,14 +97,19 @@ export default {
       fixed: false,
       items: [
         {
-          icon: 'mdi-apps',
+          icon: 'mdi-robot',
           title: 'Welcome',
           to: '/'
         },
         {
-          icon: 'mdi-chart-bubble',
-          title: 'Connect',
-          to: '/connect'
+          icon: 'mdi-rocket',
+          title: 'Mission Control',
+          to: '/mc'
+        },
+        {
+          icon: 'mdi-wrench',
+          title: 'Designer',
+          to: '/designer'
         }
       ],
       miniVariant: false,
