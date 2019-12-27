@@ -3,29 +3,19 @@ package com.datastax.powertools.missioncontrol;
 import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 
+import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import com.datastax.powertools.api.LanderSequence;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.commons.io.IOUtils;
 
 import javax.enterprise.context.ApplicationScoped;
-import javax.ws.rs.ApplicationPath;
-import javax.ws.rs.client.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.security.Security;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.IntStream;
 
 /*
  *
@@ -40,12 +30,14 @@ public class MissionControlManager {
     private static Logger logger = LoggerFactory.getLogger(MissionControlManager.class);
     Map<String, LanderMission> missions = new HashMap<String, LanderMission>();
     private List<CassandraNode> cluster;
+    int arrMaxSize = 1024;
 
     public void setMissions(Map<String, LanderMission> missions) {
         this.missions = missions;
     }
 
     public void setCluster(List<CassandraNode> cluster) {
+        logger.info("Setting cluster:" + cluster);
         this.cluster = cluster;
     }
 
@@ -129,10 +121,10 @@ public class MissionControlManager {
                 exitStatuses.add(
                         ssh(
                                 command,
-                                node.getBroadcastRpcAddress().
+                                node.getBroadcastAddress().
                                         toString().split(":")[0].
                                         split("/")[1],
-                                node.getPrivateKey(), node.getUser()));
+                                node.getPrivateKey(), node.getSshUser()));
             }
         }
         if (exitStatuses.stream().filter(x -> x.equals(0)).count() == exitStatuses.stream().count()){
@@ -204,7 +196,113 @@ public class MissionControlManager {
         }
     }
 
+    private String sshReturn(String command, String host, String key, String user) {
+
+        //TODO: consider creating fewer objects for efficiency
+        JSch jsch = new JSch();
+
+        //TODO: maybe allow non standard ssh port?
+        int port = 22;
+        String privateKey = key;
+        logger.info(String.format("running ssh command on %s", host));
+        logger.debug(String.format("running ssh command %s on %s", command, host));
+
+        try {
+            if (privateKey != null) {
+                Security.addProvider(new BouncyCastleProvider());
+                jsch.addIdentity(user, privateKey.substring(0, privateKey.length() - 1).getBytes(), null, null);
+                logger.debug("identity added ");
+            }
+
+            StringBuilder builder = new StringBuilder();
+
+            Session session = jsch.getSession(user, host, port);
+            logger.debug("session created.");
+
+            // We can't do host checking against new boxes constantly
+            session.setConfig("StrictHostKeyChecking", "no");
+
+            session.connect();
+            logger.debug("session connected.....");
+
+            Channel channel = session.openChannel("exec");
+            ((ChannelExec) channel).setCommand(command);
+            channel.setInputStream(null);
+            ((ChannelExec) channel).setErrStream(System.err);
+
+            InputStream in = channel.getInputStream();
+
+            channel.connect();
+
+            byte[] tmp = new byte[arrMaxSize];
+
+            while ( true )
+            {
+                while ( in.available() > 0 )
+                {
+                    int i = in.read( tmp, 0, arrMaxSize );
+                    if ( i < 0 )
+                        break;
+                    builder.append( new String( tmp, 0, i ) );
+                }
+
+                if ( channel.isClosed() )
+                {
+                    break;
+                }
+                try
+                {
+                    Thread.sleep( 500 );
+                }
+                catch ( Exception ee )
+                {
+
+                }
+            }
+
+            if ( channel.isClosed() && channel.getExitStatus() != 0 )
+            {
+                logger.debug( "Command exited with error code " + channel.getExitStatus() );
+            }
+
+            int exitStatus = channel.getExitStatus();
+            if (exitStatus != 0){
+                //TODO figure out how to get the output from failed ssh sessions
+                //logger.warn(read(in));
+                logger.warn(String.format("failed with exit status %s",exitStatus));
+            }
+            return builder.toString();
+
+        } catch (JSchException e) {
+            logger.warn("JSch error - is this node still coming up?" + host);
+            e.printStackTrace();
+            return "Failure";
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "Failure";
+        }
+    }
+
+
     public List<LanderSequence> getSequencesFromMission(String missionName) {
         return missions.get(missionName).getSequences();
+    }
+
+    public String executeCommand(String command) {
+        if (cluster == null){
+            throw new RuntimeException("Cluster not configured");
+        }
+        CassandraNode node = cluster.get(0);
+        //TODO: allow different address
+        String host = node.getBroadcastAddress().
+                toString().split(":")[0].
+                split("/")[1];
+        String key = node.getPrivateKey();
+        String user = node.getSshUser();
+        return sshReturn(command,host, key, user);
+    }
+
+    public void saveMission(LanderMission mission) {
+        missions.put(mission.getMissionName(), mission);
     }
 }

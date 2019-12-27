@@ -15,6 +15,7 @@
  
      <v-card
         min-width="600px"
+        width="100%"
       >
 
       <v-select
@@ -44,8 +45,8 @@
           <template v-slot:default="{ items, isExpanded, expand }">
             <v-row>
               <v-col
-                v-for="item in items"
-                :key="item.name"
+                v-for="(item, j) in items"
+                :key="item.command"
                 cols="12"
                 sm="6"
                 md="4"
@@ -76,19 +77,68 @@
                       <v-list-item-content class="align-end">{{ item.expectedResponse }}</v-list-item-content>
                     </v-list-item>
  
-                    <v-list-item v-for="(command, i) in item.commands">
+                    <v-list-item 
+                      v-for="(command, i) in item.commands"
+                      v-bind:key="command"
+                    >
                       <v-list-item-content>Command {{i}}: </v-list-item-content>
                       <v-list-item-content class="align-end">{{ command }}</v-list-item-content>
+
+                      <v-list-item-content>
+                        <v-icon 
+                          color="primary" 
+                          dark 
+                          @click.stop="currentcommand=command; currenti=i; currentj=j; dialog = true"
+                        >
+                          mdi-code-braces-box
+                        </v-icon>
+                      </v-list-item-content>
                     </v-list-item>
 
+                    <v-divider></v-divider>
+                    <v-icon color="primary" dark v-on:click="pushSequence(j)">mdi-plus</v-icon>
+
                   </v-list>
+
+
+
                 </v-card>
               </v-col>
             </v-row>
+
+
           </template>
         </v-data-iterator>
+
+        <v-row justify="center">
+          <v-dialog v-model="dialog" scrollable max-width="300px">
+            <template v-slot:activator="{ on }">
+            </template>
+            <v-card>
+              <v-card-title>Command Editor</v-card-title>
+              <v-card-text style="height: 300px;">
+                <v-textarea
+                  v-model="currentcommand"
+                  outlined
+                  name="input-7-4"
+                  :label="`Command ${currenti}`"
+                  :value="currentcommand"
+                  @change="changeCommand({currenti}, {currentj}, {currentcommand})" 
+                ></v-textarea>
+                <span>{{commandResponse}}</span>
+              </v-card-text>
+              <v-divider></v-divider>
+              <v-card-actions>
+                <v-btn color="blue darken-1" text @click="dialog = false">Close</v-btn>
+                <v-btn color="blue darken-1" text @click="executeCommand({currentcommand})">Execute</v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+        </v-row>  
+
+
         
-      <v-btn v-if="sequences.length === 0" v-on:click="save()">Save</v-btn>
+      <v-btn v-if="sequences.length !== 0" v-on:click="saveMission()">Save</v-btn>
 
       </v-card-text>
    </v-card>
@@ -107,7 +157,12 @@ export default {
           missions: ["puppies","kittens"],
           missionName: "",
           sequences: [],
-          expand: false
+          expand: false,
+          dialog: false,
+          commandResponse: "",
+          currenti: 0,
+          currentj: 0,
+          currentcommand: ""
       };
       return data;
     },
@@ -134,9 +189,12 @@ export default {
       }
     },
    methods: {
+    pushSequence(j){
+      this.sequences[j].commands.push("")
+    },
     async saveMission() {
-      const data = await axios.post('/mission/'+missionName , {
-        contactPoints: this.sequences
+      const data = await axios.post('/mission/', {
+        missionName: this.missionName, sequences: this.sequences
       })
       if (!data.err) {
         //this.$data.cassandraNodes = data.data;
@@ -146,6 +204,16 @@ export default {
       const data = await axios.get('/getSequences/' + this.missionName)
       if (!data.err) {
         this.$data.sequences = data.data;
+      }
+ 
+    },
+    async changeCommand(currenti,currentj, currentcommand) {
+      this.$set(this.$data.sequences[currentj.currentj].commands, currenti.currenti, currentcommand.currentcommand)
+    },
+    async executeCommand(currentcommand) {
+      const data = await axios.get('/executeCommand/' + currentcommand.currentcommand)
+      if (!data.err) {
+        this.$data.commandResponse = data.data;
       }
  
     }

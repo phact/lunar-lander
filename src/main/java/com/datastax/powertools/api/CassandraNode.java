@@ -9,7 +9,16 @@ public class CassandraNode {
     private Optional<InetSocketAddress> broadcastAddress;
     private Optional<InetSocketAddress> listenAddress;
     private String privateKey;
-    private String user;
+    private String sshUser;
+
+    public void setPrivateKey(String privateKey) {
+        this.privateKey = privateKey;
+    }
+
+    public void setSshUser(String sshUser) {
+        this.sshUser = sshUser;
+    }
+
 
     public void setBroadcastRpcAddress(Optional<InetSocketAddress> broadcastRpcAddress) {
         this.broadcastRpcAddress = broadcastRpcAddress;
@@ -39,7 +48,7 @@ public class CassandraNode {
         return privateKey;
     }
 
-    public String getUser() {
-        return user;
+    public String getSshUser() {
+        return sshUser;
     }
 }

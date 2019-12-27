@@ -15,6 +15,7 @@
  
       <v-card
         min-width="600px"
+        width="100%"
       >
       <v-card-text>
        <v-text-field
@@ -22,6 +23,17 @@
          label="Contact points"
          required
        ></v-text-field>
+       <v-text-field
+         v-model="sshUser"
+         label="SSH User"
+         required
+       ></v-text-field>
+       <v-textarea
+         outlined
+         v-model="privateKey"
+         label="SSH Private Key"
+       ></v-textarea>
+ 
        
    <!--    <ul> -->
    <!--    <li v-for="mission in missions"> -->
@@ -103,6 +115,8 @@ export default {
           missions: ["puppies","kittens"],
           cassandraNodes: [],
           contactpoints: "",
+          sshUser: "",
+          privateKey: "",
           missionName: "",
           expand: false
       };
@@ -134,6 +148,8 @@ export default {
     async connect() {
       const data = await axios.post('/connect', {
         contactPoints: this.contactpoints,
+        sshUser: this.sshUser,
+        privateKey: this.privateKey,
       })
       if (!data.err) {
         this.$data.cassandraNodes = data.data;

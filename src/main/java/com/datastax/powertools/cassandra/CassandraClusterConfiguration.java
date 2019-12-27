@@ -1,6 +1,6 @@
 package com.datastax.powertools.cassandra;
 
-public class CassandraConfiguration {
+public class CassandraClusterConfiguration {
 
     private int cqlPort = 9042;
     private String contactPoints;
@@ -11,6 +11,8 @@ public class CassandraConfiguration {
     private String sslKsPass;
     private String sslTsPath;
     private String sslTsPass;
+    private String sshUser;
+    private String privateKey;
 
     public int getCqlPort() {
         return cqlPort;
@@ -82,6 +84,22 @@ public class CassandraConfiguration {
 
     public void setSslTsPath(String sslTsPath) {
         this.sslTsPath = sslTsPath;
+    }
+
+    public String getSshUser() {
+        return sshUser;
+    }
+
+    public void setSshUser(String sshUser) {
+        this.sshUser = sshUser;
+    }
+
+    public String getPrivateKey() {
+        return privateKey;
+    }
+
+    public void setPrivateKey(String privateKey) {
+        this.privateKey = privateKey;
     }
 }
 

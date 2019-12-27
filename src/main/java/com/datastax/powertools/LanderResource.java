@@ -3,7 +3,7 @@ package com.datastax.powertools;
 import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 import com.datastax.powertools.api.LanderSequence;
-import com.datastax.powertools.cassandra.CassandraConfiguration;
+import com.datastax.powertools.cassandra.CassandraClusterConfiguration;
 import com.datastax.powertools.cassandra.CassandraManager;
 import com.datastax.powertools.missioncontrol.MissionControlManager;
 import io.quarkus.runtime.StartupEvent;
@@ -14,6 +14,7 @@ import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.net.InetSocketAddress;
 import java.util.*;
 
 @Produces(MediaType.APPLICATION_JSON)
@@ -69,22 +70,63 @@ public class LanderResource {
             return Response.ok(missionControlManager.getMissionNames()).build();
         } catch (Exception e) {
             e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
         }
-        return Response.serverError().build();
     }
 
     @Path("/connect")
     @POST
-    public Response connect(CassandraConfiguration config){
+    public Response connect(CassandraClusterConfiguration config){
         logger.info("Connecting to " + config.getContactPoints());
         try {
             List<CassandraNode> cluster = cassandraManager.connect(config);
+            for (CassandraNode cassandraNode : cluster) {
+                cassandraNode.setPrivateKey(config.getPrivateKey());
+                cassandraNode.setSshUser(config.getSshUser());
+            }
             missionControlManager.setCluster(cluster);
             return Response.ok(cluster).build();
         } catch (Exception e) {
+            logger.info("Could not connect to cassandra but still loading SSH options");
+            List<CassandraNode> cluster = new ArrayList<>();
+            CassandraNode node = new CassandraNode();
+            Optional<InetSocketAddress> broadcastRpcAddress = Optional.of(new InetSocketAddress(config.getContactPoints(), 9042));
+            node.setBroadcastRpcAddress(broadcastRpcAddress);
+            node.setPrivateKey(config.getPrivateKey());
+            node.setSshUser(config.getSshUser());
+            cluster.add(node);
+            missionControlManager.setCluster(cluster);
             e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
         }
-        return Response.serverError().build();
+    }
+
+    @Path("/mission")
+    @POST
+    public Response saveMission(LanderMission mission){
+        logger.info("Saving mission: " + mission.getMissionName());
+        try {
+            missionControlManager.saveMission(mission);
+            return Response.ok().build();
+        } catch (Exception e) {
+            logger.info("Could not save mission");
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
+
+    @Path("/executeCommand/{command}")
+    @GET
+    public Response executeCommand(@PathParam("command") String command){
+        logger.info("Executing: " + command);
+        try {
+            String response = missionControlManager.executeCommand(command) ;
+            return Response.ok(response).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
     }
 
     @Path("/initiateSequence/{missionName}")
@@ -95,8 +137,8 @@ public class LanderResource {
             return Response.ok(missionControlManager.initiateSequence(missionName)).build();
         } catch (Exception e) {
             e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
         }
-        return Response.serverError().build();
     }
 
     @Path("/getSequences/{missionName}")
@@ -108,7 +150,7 @@ public class LanderResource {
             return Response.ok(sequences).build();
         } catch (Exception e) {
             e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
         }
-        return Response.serverError().build();
     }
 }

@@ -25,7 +25,7 @@ public class CassandraManager {
     private Logger logger = Logger.getLogger(CassandraManager.class);
 
 
-    public List connect(CassandraConfiguration config) {
+    public List connect(CassandraClusterConfiguration config) {
         CqlSessionBuilder builder = CqlSession.builder();
         builder = builder.addContactPoint(InetSocketAddress.createUnresolved(
                 config.getContactPoints(),
