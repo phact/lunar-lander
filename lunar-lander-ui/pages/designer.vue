@@ -38,7 +38,8 @@
           v-if="sequences.length > 0"
           :items="sequences"
           item-key="name"
-          :items-per-page="4"
+          :items-per-page="itemsPerPage"
+          :page="page"
           :single-expand="expand"
           hide-default-footer
         >
@@ -54,7 +55,10 @@
               >
                 <v-card>
                   <v-card-title>
-                    <h4>{{ item.name }}</h4>
+                    <v-text-field
+                      v-model="item.name"
+                      label="Sequence Name"
+                    >{{ item.name }}</v-text-field>
                   </v-card-title>
                   <v-switch
                     :input-value="isExpanded(item)"
@@ -96,7 +100,7 @@
                     </v-list-item>
 
                     <v-divider></v-divider>
-                    <v-icon color="primary" dark v-on:click="pushSequence(j)">mdi-plus</v-icon>
+                    <v-icon color="primary" dark v-on:click="pushCommand(j)">mdi-plus</v-icon>
 
                   </v-list>
 
@@ -104,10 +108,72 @@
 
                 </v-card>
               </v-col>
+
+              <v-col>
+                    <v-icon color="primary" dark v-on:click="pushSequence(i)">mdi-plus</v-icon>
+              </v-col>
             </v-row>
-
-
           </template>
+
+
+          <template v-slot:footer>
+            <v-row class="mt-2" align="center" justify="center">
+              <span class="grey--text">Items per page</span>
+              <v-menu offset-y>
+                <template v-slot:activator="{ on }">
+                  <v-btn
+                    dark
+                    text
+                    color="primary"
+                    class="ml-2"
+                    v-on="on"
+                  >
+                    {{ itemsPerPage }}
+                    <v-icon>mdi-chevron-down</v-icon>
+                  </v-btn>
+                </template>
+                <v-list>
+                  <v-list-item
+                    v-for="(number, index) in itemsPerPageArray"
+                    :key="index"
+                    @click="updateItemsPerPage(number)"
+                  >
+                    <v-list-item-title>{{ number }}</v-list-item-title>
+                  </v-list-item>
+                </v-list>
+              </v-menu>
+
+              <v-spacer></v-spacer>
+
+              <span
+                class="mr-4
+                grey--text"
+              >
+                Page {{ page }} of {{ numberOfPages }}
+              </span>
+              <v-btn
+                fab
+                dark
+                color="blue darken-3"
+                class="mr-1"
+                @click="formerPage"
+              >
+                <v-icon>mdi-chevron-left</v-icon>
+              </v-btn>
+              <v-btn
+                fab
+                dark
+                color="blue darken-3"
+                class="ml-1"
+                @click="nextPage"
+              >
+                <v-icon>mdi-chevron-right</v-icon>
+              </v-btn>
+            </v-row>
+          </template>
+
+
+
         </v-data-iterator>
 
         <v-row justify="center">
@@ -117,7 +183,8 @@
             <v-card>
               <v-card-title>Command Editor</v-card-title>
               <v-card-text style="height: 300px;">
-                <v-textarea
+                <v-spacer></v-spacer>
+                <v-textarea style="margin-top:10px"
                   v-model="currentcommand"
                   outlined
                   name="input-7-4"
@@ -162,7 +229,10 @@ export default {
           commandResponse: "",
           currenti: 0,
           currentj: 0,
-          currentcommand: ""
+          currentcommand: "",
+          page: 1,
+          itemsPerPage: 10,
+          itemsPerPageArray: [10, 20, 50]
       };
       return data;
     },
@@ -189,8 +259,11 @@ export default {
       }
     },
    methods: {
-    pushSequence(j){
+    pushCommand(j){
       this.sequences[j].commands.push("")
+    },
+    pushSequence(i){
+      this.sequences.push({ "commands": []})
     },
     async saveMission() {
       const data = await axios.post('/mission/', {
@@ -216,7 +289,23 @@ export default {
         this.$data.commandResponse = data.data;
       }
  
-    }
-  }
+    },
+    nextPage () {
+      if (this.page + 1 <= this.numberOfPages) this.page += 1
+    },
+    formerPage () {
+      if (this.page - 1 >= 1) this.page -= 1
+    },
+    updateItemsPerPage (number) {
+      this.itemsPerPage = number
+    },
+ 
+  },
+  computed: {
+     numberOfPages () {
+       return Math.ceil(this.sequences.length / this.itemsPerPage)
+     },
+   },
+
 }
 </script>
