@@ -43,14 +43,19 @@
    <!--    </ul> -->
 
 
+       <v-container fluid>
+
        <v-data-iterator
           v-if="cassandraNodes.length > 0"
           :items="cassandraNodes"
           item-key="broadcastAddress"
-          :items-per-page="4"
+          :items-per-page="itemsPerPage"
+          :page="page"
           :single-expand="expand"
           hide-default-footer
         >
+
+
           <template v-slot:default="{ items, isExpanded, expand }">
             <v-row>
               <v-col
@@ -86,7 +91,68 @@
               </v-col>
             </v-row>
           </template>
-        </v-data-iterator>
+
+
+
+          <template v-slot:footer>
+            <v-row class="mt-2" align="center" justify="center">
+              <span class="grey--text">Items per page</span>
+              <v-menu offset-y>
+                <template v-slot:activator="{ on }">
+                  <v-btn
+                    dark
+                    text
+                    color="primary"
+                    class="ml-2"
+                    v-on="on"
+                  >
+                    {{ itemsPerPage }}
+                    <v-icon>mdi-chevron-down</v-icon>
+                  </v-btn>
+                </template>
+                <v-list>
+                  <v-list-item
+                    v-for="(number, index) in itemsPerPageArray"
+                    :key="index"
+                    @click="updateItemsPerPage(number)"
+                  >
+                    <v-list-item-title>{{ number }}</v-list-item-title>
+                  </v-list-item>
+                </v-list>
+              </v-menu>
+
+              <v-spacer></v-spacer>
+
+              <span
+                class="mr-4
+                grey--text"
+              >
+                Page {{ page }} of {{ numberOfPages }}
+              </span>
+              <v-btn
+                fab
+                dark
+                color="blue darken-3"
+                class="mr-1"
+                @click="formerPage"
+              >
+                <v-icon>mdi-chevron-left</v-icon>
+              </v-btn>
+              <v-btn
+                fab
+                dark
+                color="blue darken-3"
+                class="ml-1"
+                @click="nextPage"
+              >
+                <v-icon>mdi-chevron-right</v-icon>
+              </v-btn>
+            </v-row>
+          </template>
+
+      </v-data-iterator>
+
+      </v-container fluid>
         
       <v-btn v-if="cassandraNodes.length === 0" v-on:click="connect()">Connect</v-btn>
       <v-select
@@ -118,7 +184,10 @@ export default {
           sshUser: "",
           privateKey: "",
           missionName: "",
-          expand: false
+          expand: false,
+          page: 1,
+          itemsPerPage: 10,
+          itemsPerPageArray: [10, 20, 50]
       };
       return data;
     },
@@ -161,7 +230,21 @@ export default {
         this.$data.cassandraNodes = data.data;
       }
  
-    }
-  }
+    },
+    nextPage () {
+      if (this.page + 1 <= this.numberOfPages) this.page += 1
+    },
+    formerPage () {
+      if (this.page - 1 >= 1) this.page -= 1
+    },
+    updateItemsPerPage (number) {
+      this.itemsPerPage = number
+    },
+  },
+   computed: {
+      numberOfPages () {
+        return Math.ceil(this.cassandraNodes.length / this.itemsPerPage)
+      },
+    },
 }
 </script>
