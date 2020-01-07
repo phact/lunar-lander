@@ -8,7 +8,7 @@ fi
 
 while true; do
 
-inotifywait -e modify,create,delete --exclude '^\./\.' -r ./  && \
+inotifywait -e modify,create,delete --exclude '.*\.swp.*' -r ./  && \
 nuxt generate
 
 done
