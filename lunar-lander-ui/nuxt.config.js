@@ -11,7 +11,7 @@ export default {
   ** Headers of the page
   */
   head: {
-    titleTemplate: '%s - ' + process.env.npm_package_name,
+    titleTemplate: '%s' + "Lunar Lander",
     title: process.env.npm_package_name || '',
     meta: [
       { charset: 'utf-8' },
@@ -76,7 +76,7 @@ export default {
     ** You can extend webpack config here
     */
     extend (config, ctx) {
-    }
+    },
   },
   generate: {
     dir: '../src/main/resources/META-INF/resources/',
