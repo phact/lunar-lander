@@ -65,7 +65,7 @@ public class LanderResource {
     @Path("/missions")
     @GET
     public Response getMissions(){
-        logger.info("Getting missions ");
+        logger.info("Getting missions");
         try {
             return Response.ok(missionControlManager.getMissionNames()).build();
         } catch (Exception e) {
@@ -115,6 +115,19 @@ public class LanderResource {
         }
     }
 
+    @Path("/deleteMission")
+    @POST
+    public Response deleteMission(LanderMission mission){
+        logger.info("Deleting mission:  " + mission.getMissionName());
+        try {
+            missionControlManager.deleteMission(mission);
+            return Response.ok().build();
+        } catch (Exception e) {
+            logger.info("Could not save mission");
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
 
     @Path("/executeCommand/{command}")
     @GET
@@ -125,7 +138,7 @@ public class LanderResource {
             return Response.ok(response).build();
         } catch (Exception e) {
             e.printStackTrace();
-            return Response.serverError().entity(e.getMessage()).build();
+            return Response.serverError().entity(e.getStackTrace()).build();
         }
     }
 

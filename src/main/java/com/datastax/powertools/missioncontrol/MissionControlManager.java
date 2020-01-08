@@ -305,4 +305,9 @@ public class MissionControlManager {
     public void saveMission(LanderMission mission) {
         missions.put(mission.getMissionName(), mission);
     }
+
+    public void deleteMission(LanderMission mission) {
+        logger.info("deleting mission");
+        missions.remove(mission.getMissionName());
+    }
 }
