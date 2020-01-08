@@ -16,24 +16,23 @@
      <v-card
         min-width="600px"
         width="100%"
-      >
+     >
+     <v-container fluid>
 
       <v-select
+        v-if="missionName == null || missionName == ''"
         :items="missions"
         label="Mission"
         v-model="missionName"
-        v-on:change="getSequences()"
+        value="missionName"
+        v-on:change="newType = 'Clone';getSequences();"
         outlined
       ></v-select>
  
-      <v-card-text>
-       <v-text-field
-         v-model="missionName"
-         label="Mission Name"
-         required
-       ></v-text-field>
-       
-
+       <v-container fluid>
+       <h4 v-if="missionName != null && missionName != ''">
+         {{missionName}}
+       </h4>
        <v-data-iterator
           v-if="sequences.length > 0"
           :items="sequences"
@@ -59,6 +58,9 @@
                       v-model="item.name"
                       label="Sequence Name"
                     >{{ item.name }}</v-text-field>
+
+                    <v-icon color="primary" dark v-on:click="spliceSequence(j)">mdi-delete</v-icon>
+
                   </v-card-title>
                   <v-switch
                     :input-value="isExpanded(item)"
@@ -92,10 +94,11 @@
                         <v-icon 
                           color="primary" 
                           dark 
-                          @click.stop="currentcommand=command; currenti=i; currentj=j; dialog = true"
+                          @click.stop="currentcommand=command; currenti=i; currentj=j; commandDialog = true"
                         >
                           mdi-code-braces-box
                         </v-icon>
+                        <v-icon color="primary" dark v-on:click="spliceCommand(j,i)">mdi-delete</v-icon>
                       </v-list-item-content>
                     </v-list-item>
 
@@ -175,9 +178,10 @@
 
 
         </v-data-iterator>
+       </v-container fluid>
 
         <v-row justify="center">
-          <v-dialog v-model="dialog" scrollable max-width="300px">
+          <v-dialog v-model="commandDialog" scrollable max-width="300px">
             <template v-slot:activator="{ on }">
             </template>
             <v-card>
@@ -196,18 +200,59 @@
               </v-card-text>
               <v-divider></v-divider>
               <v-card-actions>
-                <v-btn color="blue darken-1" text @click="dialog = false">Close</v-btn>
+                <v-btn color="blue darken-1" text @click="commandDialog = false">Close</v-btn>
                 <v-btn color="blue darken-1" text @click="executeCommand({currentcommand})">Execute</v-btn>
               </v-card-actions>
             </v-card>
           </v-dialog>
+
+          <v-dialog v-model="missionDialog" scrollable max-width="300px">
+            <template v-slot:activator="{ on }">
+            </template>
+            <v-card>
+              <v-card-title>New Mission</v-card-title>
+              <v-card-text style="height: 300px;">
+                <v-spacer></v-spacer>
+                <v-textarea style="margin-top:10px"
+                  v-model="missionName"
+                  outlined
+                  name="input-7-4"
+                  :label="`Mission Name`"
+                ></v-textarea>
+              </v-card-text>
+              <v-divider></v-divider>
+              <v-card-actions>
+                <v-btn 
+                  v-if="newType=='New'"
+                  color="blue darken-1" 
+                  text 
+                  @click="missionDialog = false ; newMission();"
+                >
+                  New
+                </v-btn>
+                <v-btn 
+                  v-if="newType=='Clone'"
+                  color="blue darken-1" 
+                  text 
+                  @click="missionDialog = false; cloneMission();"
+                >
+                  Clone
+                </v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+ 
         </v-row>  
 
 
         
-      <v-btn v-if="sequences.length !== 0" v-on:click="saveMission()">Save</v-btn>
+      <v-btn v-if="sequences.length !== 0" v-on:click="saveMission()">Save Mission</v-btn>
+      <v-btn v-if="sequences.length !== 0" v-on:click="deleteMission()">Delete Mission</v-btn>
+      <v-btn v-on:click="missionDialog = true">{{newType}} Mission</v-btn>
+      <v-btn v-if="sequences.length !== 0" v-on:click="clearSelectedMission()">Back</v-btn>
 
       </v-card-text>
+      <v-container fluid>
    </v-card>
   </v-layout>
 </template>
@@ -225,14 +270,16 @@ export default {
           missionName: "",
           sequences: [],
           expand: false,
-          dialog: false,
+          commandDialog: false,
+          missionDialog: false,
           commandResponse: "",
           currenti: 0,
           currentj: 0,
           currentcommand: "",
           page: 1,
           itemsPerPage: 10,
-          itemsPerPageArray: [10, 20, 50]
+          itemsPerPageArray: [10, 20, 50],
+          newType: "New"
       };
       return data;
     },
@@ -259,11 +306,24 @@ export default {
       }
     },
    methods: {
-    pushCommand(j){
-      this.sequences[j].commands.push("")
+    newMission(){
+      this.missions.push(this.missionName)
+      this.sequences=[{"commands":[]}];
     },
-    pushSequence(i){
-      this.sequences.push({ "commands": []})
+    cloneMission(){
+      this.missions.push(this.missionName)
+    },
+    pushCommand(j){
+      this.sequences[j].commands.push("");
+    },
+    spliceCommand(j,i){
+      this.sequences[j].commands.splice(i,1);
+    },
+    pushSequence(){
+      this.sequences.push({ "commands": []});
+    },
+    spliceSequence(j){
+      this.sequences.splice(j,1);
     },
     async saveMission() {
       const data = await axios.post('/mission/', {
@@ -273,7 +333,19 @@ export default {
         //this.$data.cassandraNodes = data.data;
       }
     },
-    async getSequences() {
+    async deleteMission() {
+      const data = await axios.post('/deleteMission/', {
+        missionName: this.missionName
+      })
+      if (!data.err) {
+        this.$data.missions.splice((this.$data.missions.indexOf(this.missionName)),1)
+        this.$data.missionName="";
+        this.$data.sequences = [];
+        this.$data.newType = "New";
+        //this.$data.cassandraNodes = data.data;
+      }
+    },
+   async getSequences() {
       const data = await axios.get('/getSequences/' + this.missionName)
       if (!data.err) {
         this.$data.sequences = data.data;
@@ -299,13 +371,18 @@ export default {
     updateItemsPerPage (number) {
       this.itemsPerPage = number
     },
+    clearSelectedMission() {
+      this.missionName="";
+      this.sequences = [];
+      this.newType = "New";
+    },
  
   },
   computed: {
-     numberOfPages () {
-       return Math.ceil(this.sequences.length / this.itemsPerPage)
-     },
-   },
+    numberOfPages () {
+      return Math.ceil(this.sequences.length / this.itemsPerPage)
+    },
+  },
 
 }
 </script>
