@@ -78,6 +78,17 @@
       <artifactId>commons-io</artifactId>
       <version>2.5</version>
     </dependency>
+    <dependency>
+      <groupId>com.github.docker-java</groupId>
+      <artifactId>docker-java</artifactId>
+      <version>3.2.0-rc2</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>docker-java-transport-jersey</artifactId>
+          <groupId>com.github.docker-java</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -104,6 +115,14 @@
           <systemProperties>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
           </systemProperties>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>9</source>
+          <target>9</target>
         </configuration>
       </plugin>
     </plugins>
