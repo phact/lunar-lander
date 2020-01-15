@@ -157,7 +157,7 @@
       <v-btn v-if="cassandraNodes.length === 0" v-on:click="connect()">Connect</v-btn>
       <v-select
         v-if="cassandraNodes.length > 0" 
-        :items="missions"
+        :items="missionNames"
         label="Mission"
         v-model="missionName"
         outlined
@@ -178,7 +178,7 @@ const fetch = require('node-fetch');
 export default {
     data: () => {
       let data = {
-          missions: ["puppies","kittens"],
+          missionNames: ["puppies","kittens"],
           cassandraNodes: [],
           contactpoints: "",
           sshUser: "",
@@ -195,14 +195,14 @@ export default {
       Logo,
     },
     async asyncData() {
-      let data = await fetch("/missions")
+      let data = await fetch("/missionNames")
                 .then(res => {
                     return res.json()
                 })
 
-      //this.$data.missions = data;
+      //this.$data.missionNames = data;
       return { 
-          missions: data,
+          missionNames: data,
       };
     },
  

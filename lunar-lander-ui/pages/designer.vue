@@ -21,7 +21,7 @@
 
       <v-select
         v-if="missionName == null || missionName == ''"
-        :items="missions"
+        :items="missionNames"
         label="Mission"
         v-model="missionName"
         value="missionName"
@@ -48,9 +48,9 @@
                 v-for="(item, j) in items"
                 :key="item.command"
                 cols="12"
-                sm="6"
-                md="4"
-                lg="3"
+                sm="10"
+                md="6"
+                lg="4"
               >
                 <v-card>
                   <v-card-title>
@@ -71,26 +71,45 @@
                   <v-divider></v-divider>
                   <v-list v-if="isExpanded(item)" dense>
                     <v-list-item>
+                      <v-col>
                       <v-list-item-content>Name:</v-list-item-content>
+                      </v-col>
+                      <v-col>
                       <v-list-item-content class="align-end">{{ item.name }}</v-list-item-content>
+                      </v-col>
                     </v-list-item>
                     <v-list-item>
+                      <v-col>
                       <v-list-item-content>Sequence type:</v-list-item-content>
+                      </v-col>
+                      <v-col>
                       <v-list-item-content class="align-end">{{ item.sequenceType }}</v-list-item-content>
+                      </v-col>
                     </v-list-item>
                     <v-list-item>
+                      <v-col>
                       <v-list-item-content>Expected response:</v-list-item-content>
-                      <v-list-item-content class="align-end">{{ item.expectedResponse }}</v-list-item-content>
+                      </v-col>
+                      <v-col>
+                      <v-text-field 
+                        class="align-end"
+                        v-model="item.expectedResponse"
+                        label="Expected response"
+                      >{{ item.expectedResponse }}
+                      </v-col>
+                      </v-text-field>
                     </v-list-item>
  
                     <v-list-item 
                       v-for="(command, i) in item.commands"
                       v-bind:key="command"
                     >
+                      <v-col>
                       <v-list-item-content>Command {{i}}: </v-list-item-content>
+                      </v-col>
+                      <v-col>
                       <v-list-item-content class="align-end">{{ command }}</v-list-item-content>
 
-                      <v-list-item-content>
                         <v-icon 
                           color="primary" 
                           dark 
@@ -99,7 +118,7 @@
                           mdi-code-braces-box
                         </v-icon>
                         <v-icon color="primary" dark v-on:click="spliceCommand(j,i)">mdi-delete</v-icon>
-                      </v-list-item-content>
+                      </v-col>
                     </v-list-item>
 
                     <v-divider></v-divider>
@@ -241,6 +260,35 @@
               </v-card-actions>
             </v-card>
           </v-dialog>
+
+          <v-dialog v-model="importDialog" scrollable max-width="300px">
+            <template v-slot:activator="{ on }">
+            </template>
+            <v-card>
+              <v-card-title>Import Missions</v-card-title>
+              <v-card-text style="height: 300px;">
+                <v-spacer></v-spacer>
+                <v-textarea style="margin-top:10px"
+                  v-model="missionsToImport"
+                  outlined
+                  name="input-7-4"
+                  label="Missions JSON"
+                ></v-textarea>
+              </v-card-text>
+              <v-divider></v-divider>
+              <v-card-actions>
+                <v-btn 
+                  color="blue darken-1" 
+                  text 
+                  @click="importDialog = false ; importMissions();"
+                >
+                  Import Missions
+                </v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+ 
+ 
  
         </v-row>  
 
@@ -249,10 +297,12 @@
       <v-btn v-if="sequences.length !== 0" v-on:click="saveMission()">Save Mission</v-btn>
       <v-btn v-if="sequences.length !== 0" v-on:click="deleteMission()">Delete Mission</v-btn>
       <v-btn v-on:click="missionDialog = true">{{newType}} Mission</v-btn>
+      <v-btn v-if="sequences.length === 0" v-on:click="exportMissions()">Export Missions</v-btn>
+      <v-btn v-if="sequences.length === 0" v-on:click="importDialog = true">Import Missions</v-btn>
       <v-btn v-if="sequences.length !== 0" v-on:click="clearSelectedMission()">Back</v-btn>
 
       </v-card-text>
-      <v-container fluid>
+      </v-container fluid>
    </v-card>
   </v-layout>
 </template>
@@ -266,12 +316,13 @@ const fetch = require('node-fetch');
 export default {
     data: () => {
       let data = {
-          missions: ["puppies","kittens"],
+          missionNames: ["puppies","kittens"],
           missionName: "",
           sequences: [],
           expand: false,
           commandDialog: false,
           missionDialog: false,
+          importDialog: false,
           commandResponse: "",
           currenti: 0,
           currentj: 0,
@@ -279,6 +330,7 @@ export default {
           page: 1,
           itemsPerPage: 10,
           itemsPerPageArray: [10, 20, 50],
+          missionsToImport: "",
           newType: "New"
       };
       return data;
@@ -287,15 +339,16 @@ export default {
       Logo,
     },
     async asyncData() {
-      let data = await fetch("/missions")
+      let data = await fetch("/missionNames")
                 .then(res => {
                     return res.json()
                 })
 
-      //this.$data.missions = data;
+      //this.$data.missionNames = data;
       return { 
-          missions: data,
+          missionNames: data,
       };
+ 
     },
  
     head () {
@@ -306,12 +359,22 @@ export default {
       }
     },
    methods: {
+    //TODO: snackbar and spinner on requests
+    async getMissionNames(){
+      let data = await fetch("/missionNames")
+                .then(res => {
+                    return res.json()
+                })
+
+      //this.$data.missionNames = data;
+      this.$data.missionNames=data;
+    },
     newMission(){
-      this.missions.push(this.missionName)
+      this.missionNames.push(this.missionName)
       this.sequences=[{"commands":[]}];
     },
     cloneMission(){
-      this.missions.push(this.missionName)
+      this.missionNames.push(this.missionName)
     },
     pushCommand(j){
       this.sequences[j].commands.push("");
@@ -338,13 +401,28 @@ export default {
         missionName: this.missionName
       })
       if (!data.err) {
-        this.$data.missions.splice((this.$data.missions.indexOf(this.missionName)),1)
+        this.$data.missionNames.splice((this.$data.missionNames.indexOf(this.missionName)),1)
         this.$data.missionName="";
         this.$data.sequences = [];
         this.$data.newType = "New";
         //this.$data.cassandraNodes = data.data;
       }
     },
+    async exportMissions() {
+      const data = await axios.get('/missions/')
+      if (!data.err) {
+        alert(JSON.stringify(data.data))
+      }
+    },
+
+    async importMissions() {
+      const data = await axios.put('/missions/', JSON.parse(this.missionsToImport))
+      if (!data.err) {
+        this.getMissionNames();
+      }
+    },
+ 
+ 
    async getSequences() {
       const data = await axios.get('/getSequences/' + this.missionName)
       if (!data.err) {
@@ -356,7 +434,7 @@ export default {
       this.$set(this.$data.sequences[currentj.currentj].commands, currenti.currenti, currentcommand.currentcommand)
     },
     async executeCommand(currentcommand) {
-      const data = await axios.get('/executeCommand/' + currentcommand.currentcommand)
+      const data = await axios.get('/executeCommand/' + encodeURI(currentcommand.currentcommand))
       if (!data.err) {
         this.$data.commandResponse = data.data;
       }
