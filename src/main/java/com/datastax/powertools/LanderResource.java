@@ -34,7 +34,6 @@ public class LanderResource {
     void onStart(@Observes StartupEvent ev) {               //
         logger.info("The application is starting...");
         setup();
-
     }
 
     private void setup() {
@@ -54,7 +53,7 @@ public class LanderResource {
 
         sequence.setCommands(commands);
         sequence.setName("puppies");
-        sequence.setSequenceType(LanderSequence.SequenceType.PARALLEL);
+        sequence.setSequenceType(LanderSequence.SequenceType.FIRE_AND_FORGET);
 
         LanderMission mission = new LanderMission(missionName, sequences);
         missions.put(missionName, mission);
@@ -62,12 +61,37 @@ public class LanderResource {
         missionControlManager.setMissions(missions);
     }
 
+    @Path("/missionNames")
+    @GET
+    public Response getMissionNames(){
+        logger.info("Getting mission names");
+        try {
+            return Response.ok(missionControlManager.getMissionNames()).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
     @Path("/missions")
     @GET
     public Response getMissions(){
         logger.info("Getting missions");
         try {
-            return Response.ok(missionControlManager.getMissionNames()).build();
+            return Response.ok(missionControlManager.getMissions()).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
+    @Path("/missions")
+    @PUT
+    public Response setMissions(Map<String, LanderMission> missions){
+        logger.info("Setting missions");
+        try {
+            missionControlManager.setMissions(missions);
+            return Response.ok().build();
         } catch (Exception e) {
             e.printStackTrace();
             return Response.serverError().entity(e.getMessage()).build();

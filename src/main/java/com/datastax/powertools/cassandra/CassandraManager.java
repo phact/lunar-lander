@@ -5,7 +5,6 @@ import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.metadata.Node;
 import com.datastax.powertools.api.CassandraNode;
 import org.jboss.logging.Logger;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.net.ssl.KeyManagerFactory;
@@ -41,7 +40,7 @@ public class CassandraManager {
             builder = builder.withSslContext(createSSLOptions(config.getSslTsPath(), config.getSslTsPass(), config.getSslKsPath(), config.getSslKsPass()));
 
             logger.info("Enabling SSL with sskKsPath=" + config.getSslKsPath());
-            throw new NotImplementedException();
+            throw new RuntimeException("not implemented");
         }
 
         session = builder.build();

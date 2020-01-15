@@ -12,7 +12,6 @@ import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.commons.io.IOUtils;
 
 import javax.enterprise.context.ApplicationScoped;
 import java.security.Security;
@@ -85,13 +84,10 @@ public class MissionControlManager {
             //TODO: stick success and failiure on the cluster rather than collecting
             boolean success = false;
             switch (sequenceType) {
-                case PARALLEL:
+                case FIRE_AND_FORGET:
                     success = sshAll(commands, cluster);
                     break;
-                case ROLLING:
-                    success = sshAll(commands, cluster);
-                    break;
-                case WAIT:
+                case POLL_AND_VERIFY:
                     success = wait(commands, expectedResponse, cluster);
                     break;
                 default:
@@ -273,13 +269,10 @@ public class MissionControlManager {
             }
             return builder.toString();
 
-        } catch (JSchException e) {
-            logger.warn("JSch error - is this node still coming up?" + host);
+        } catch (Exception e) {
+            logger.warn("Failed to connect to: " + host + " with " + e.getMessage());
             e.printStackTrace();
-            return "Failure";
-        } catch (IOException e) {
-            e.printStackTrace();
-            return "Failure";
+            return "Failed to connect to: " + host + " with " + e.getMessage();
         }
     }
 
@@ -309,5 +302,9 @@ public class MissionControlManager {
     public void deleteMission(LanderMission mission) {
         logger.info("deleting mission");
         missions.remove(mission.getMissionName());
+    }
+
+    public Map<String, LanderMission> getMissions() {
+        return missions;
     }
 }

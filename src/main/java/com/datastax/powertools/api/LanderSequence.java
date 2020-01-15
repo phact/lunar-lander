@@ -45,8 +45,7 @@ public class LanderSequence {
     }
 
     public enum SequenceType {
-        PARALLEL,
-        ROLLING,
-        WAIT
+        FIRE_AND_FORGET,
+        POLL_AND_VERIFY
     }
 }
