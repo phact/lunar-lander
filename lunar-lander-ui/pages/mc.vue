@@ -164,6 +164,14 @@
       ></v-select>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="initiateSequence()">Initiate Sequence</v-btn>
 
+      <v-data-table
+        v-if="sequenceResults.length >0"
+        :headers="Object.keys(sequenceResults[0]).map(x => {return {'text':x, 'value':x}})"
+        :items="sequenceResults"
+        :items-per-page="5"
+        class="elevation-1"
+      ></v-data-table>
+
       </v-card-text>
    </v-card>
   </v-layout>
@@ -171,6 +179,8 @@
 <script>
 import axios from 'axios'
 import Logo from '~/components/Logo.vue'
+import { mapMutations } from 'vuex'
+
 
 const fetch = require('node-fetch');
 
@@ -180,6 +190,7 @@ export default {
       let data = {
           missionNames: ["puppies","kittens"],
           cassandraNodes: [],
+          sequenceResults: [],
           contactpoints: "",
           sshUser: "",
           privateKey: "",
@@ -214,20 +225,32 @@ export default {
       }
     },
    methods: {
+    snackTime: function (snack) {
+      this.setSnack(snack)
+      //this.$router.push('/')
+    },
+    ...mapMutations({
+      setSnack: 'snackbar/setSnack'
+    }),
     async connect() {
       const data = await axios.post('/connect', {
         contactPoints: this.contactpoints,
         sshUser: this.sshUser,
         privateKey: this.privateKey,
+      }).catch(function (error) {
+        return {err: error.response.data}
       })
       if (!data.err) {
         this.$data.cassandraNodes = data.data;
+        this.snackTime("Connection created");
+      }else {
+        this.snackTime(data.err);
       }
     },
     async initiateSequence() {
       const data = await axios.get('/initiateSequence/' + this.missionName)
       if (!data.err) {
-        this.$data.cassandraNodes = data.data;
+        this.$data.sequenceResults = data.data;
       }
  
     },

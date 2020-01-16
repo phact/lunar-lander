@@ -6,6 +6,9 @@ import com.datastax.powertools.api.LanderSequence;
 import com.datastax.powertools.cassandra.CassandraClusterConfiguration;
 import com.datastax.powertools.cassandra.CassandraManager;
 import com.datastax.powertools.missioncontrol.MissionControlManager;
+import com.datastax.powertools.missioncontrol.SSHResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.StartupEvent;
 import org.jboss.logging.Logger;
 
@@ -14,6 +17,8 @@ import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.*;
 
@@ -23,6 +28,8 @@ import java.util.*;
 public class LanderResource {
 
     private static final Logger logger = Logger.getLogger(LanderResource.class);
+
+    ObjectMapper objectMapper = new ObjectMapper();
 
 
     @Inject
@@ -37,28 +44,17 @@ public class LanderResource {
     }
 
     private void setup() {
-        Map<String, LanderMission> missions = new HashMap<>();
+        logger.info("Setting up stock missions");
+        InputStream in = this.getClass().getClassLoader().getResourceAsStream("missions.json");
 
-        String missionName = "Clear DSE";
-
-        List<String> commands = new ArrayList<>();
-
-        commands.add("echo I love puppies");
-        //commands.add("sudo service dse stop");
-        //commands.add("sudo rm -rf /var/lib/cassandra/data/*; sudo rm -rf /var/lib/cassandra/commitlog/*");
-
-        List<LanderSequence> sequences = new ArrayList();
-        LanderSequence sequence = new LanderSequence();
-        sequences.add(sequence);
-
-        sequence.setCommands(commands);
-        sequence.setName("puppies");
-        sequence.setSequenceType(LanderSequence.SequenceType.FIRE_AND_FORGET);
-
-        LanderMission mission = new LanderMission(missionName, sequences);
-        missions.put(missionName, mission);
-
-        missionControlManager.setMissions(missions);
+        Map<String, LanderMission> missions = null;
+        try {
+            missions = objectMapper.readValue(in, new TypeReference<Map<String, LanderMission>>() { });
+            missionControlManager.setMissions(missions);
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Unable to read missions.json");
+        }
     }
 
     @Path("/missionNames")
@@ -111,15 +107,7 @@ public class LanderResource {
             missionControlManager.setCluster(cluster);
             return Response.ok(cluster).build();
         } catch (Exception e) {
-            logger.info("Could not connect to cassandra but still loading SSH options");
-            List<CassandraNode> cluster = new ArrayList<>();
-            CassandraNode node = new CassandraNode();
-            Optional<InetSocketAddress> broadcastRpcAddress = Optional.of(new InetSocketAddress(config.getContactPoints(), 9042));
-            node.setBroadcastRpcAddress(broadcastRpcAddress);
-            node.setPrivateKey(config.getPrivateKey());
-            node.setSshUser(config.getSshUser());
-            cluster.add(node);
-            missionControlManager.setCluster(cluster);
+            logger.info("Could not connect to cassandra");
             e.printStackTrace();
             return Response.serverError().entity(e.getMessage()).build();
         }
@@ -158,7 +146,7 @@ public class LanderResource {
     public Response executeCommand(@PathParam("command") String command){
         logger.info("Executing: " + command);
         try {
-            String response = missionControlManager.executeCommand(command) ;
+            SSHResponse response = missionControlManager.executeCommand(command) ;
             return Response.ok(response).build();
         } catch (Exception e) {
             e.printStackTrace();

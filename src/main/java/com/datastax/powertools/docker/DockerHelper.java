@@ -250,9 +250,14 @@ public class DockerHelper {
         return null;
     }
 
-    public void stopDSE()
+    public void stopContainer()
     {
         if (container != null)
             dockerClient.stopContainerCmd(container.getId()).exec();
+    }
+
+    public void rmContainer() {
+        if (container != null)
+            dockerClient.removeContainerCmd(container.getId()).exec();
     }
 }

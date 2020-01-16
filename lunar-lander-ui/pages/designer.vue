@@ -80,14 +80,6 @@
                     </v-list-item>
                     <v-list-item>
                       <v-col>
-                      <v-list-item-content>Sequence type:</v-list-item-content>
-                      </v-col>
-                      <v-col>
-                      <v-list-item-content class="align-end">{{ item.sequenceType }}</v-list-item-content>
-                      </v-col>
-                    </v-list-item>
-                    <v-list-item>
-                      <v-col>
                       <v-list-item-content>Expected response:</v-list-item-content>
                       </v-col>
                       <v-col>
@@ -200,7 +192,7 @@
        </v-container fluid>
 
         <v-row justify="center">
-          <v-dialog v-model="commandDialog" scrollable max-width="300px">
+          <v-dialog v-model="commandDialog" scrollable max-width="600px">
             <template v-slot:activator="{ on }">
             </template>
             <v-card>
@@ -215,7 +207,17 @@
                   :value="currentcommand"
                   @change="changeCommand({currenti}, {currentj}, {currentcommand})" 
                 ></v-textarea>
-                <span>{{commandResponse}}</span>
+
+                <v-data-table
+                  v-if="commandResponse != ''"
+                  :headers="Object.keys(commandResponse).map(x => {return {'text':x, 'value':x}})"
+                  :items="[commandResponse]"
+                  :items-per-page="5"
+                  class="elevation-1"
+                  hide-default-footer
+                ></v-data-table>
+
+ 
               </v-card-text>
               <v-divider></v-divider>
               <v-card-actions>
@@ -434,7 +436,7 @@ export default {
       this.$set(this.$data.sequences[currentj.currentj].commands, currenti.currenti, currentcommand.currentcommand)
     },
     async executeCommand(currentcommand) {
-      const data = await axios.get('/executeCommand/' + encodeURI(currentcommand.currentcommand))
+      const data = await axios.get('/executeCommand/' + encodeURIComponent(currentcommand.currentcommand))
       if (!data.err) {
         this.$data.commandResponse = data.data;
       }

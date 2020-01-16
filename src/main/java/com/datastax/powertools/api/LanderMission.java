@@ -11,6 +11,9 @@ public class LanderMission {
         this.sequences = sequences;
     }
 
+    public LanderMission() {
+    }
+
     public void setMissionName(String missionName) {
         this.missionName = missionName;
     }

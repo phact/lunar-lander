@@ -1,16 +1,17 @@
 package com.datastax.powertools.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.List;
 
 public class LanderSequence {
 
     private String name;
 
-
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private String expectedResponse;
 
     private List<String> commands;
-    private SequenceType sequenceType;
 
     public String getExpectedResponse() {
         return expectedResponse;
@@ -18,14 +19,6 @@ public class LanderSequence {
 
     public void setExpectedResponse(String expectedResponse) {
         this.expectedResponse = expectedResponse;
-    }
-
-    public SequenceType getSequenceType() {
-        return sequenceType;
-    }
-
-    public void setSequenceType(SequenceType sequenceType) {
-        this.sequenceType = sequenceType;
     }
 
     public void setName(String name) {
@@ -45,7 +38,7 @@ public class LanderSequence {
     }
 
     public enum SequenceType {
-        FIRE_AND_FORGET,
-        POLL_AND_VERIFY
+        DEFAULT,
+        FIRE_AND_FORGET
     }
 }
