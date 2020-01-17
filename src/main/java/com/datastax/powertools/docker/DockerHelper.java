@@ -80,7 +80,7 @@ public class DockerHelper {
         LogContainerResultCallback loggingCallback = new
                 LogContainerResultCallback();
 
-        waitForPort("localhost",22, Duration.ofMillis(50000), logger, true);
+        waitForPort("localhost",9042, Duration.ofMillis(50000), logger, true);
     }
 
     public static boolean waitForPort(String hostname, int port, Duration timeout, Logger logger, boolean quiet)

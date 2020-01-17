@@ -40,6 +40,38 @@ public class LanderResource {
 
     void onStart(@Observes StartupEvent ev) {               //
         logger.info("The application is starting...");
+
+        //for native image
+        /*
+        // TODO: figure out a better way to get around this native-image issue
+        Constructor<?>[] privateStringField = ProgrammaticArguments.class.
+                getConstructors();
+
+        ProgrammaticArguments b = null;
+        for (Constructor<?> constructor : privateStringField) {
+            constructor.setAccessible(true);
+
+            constructor.newInstance(Arrays.asList(),
+                    null,
+                    null,
+                    null,
+                    new HashMap<>(),
+                    new HashMap<>(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+        DriverConfigLoader a = new DefaultDriverConfigLoader();
+
+        DriverContext context = new DefaultDriverContext(a, b);
+        new ExponentialReconnectionPolicy(context);
+         */
+
+
         setup();
     }
 

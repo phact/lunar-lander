@@ -1,15 +1,22 @@
 package com.datastax.powertools.missioncontrol;
 
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.context.DriverContext;
+import com.datastax.oss.driver.api.core.session.ProgrammaticArguments;
+import com.datastax.oss.driver.internal.core.config.typesafe.DefaultDriverConfigLoader;
+import com.datastax.oss.driver.internal.core.connection.ExponentialReconnectionPolicy;
+import com.datastax.oss.driver.internal.core.context.DefaultDriverContext;
 import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 
 import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import com.datastax.powertools.api.LanderSequence;
 import com.jcraft.jsch.*;
-import org.apache.commons.io.IOUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +83,8 @@ public class MissionControlManager {
                 logger.debug("session connected.....");
 
                 sessions.put(host, session);
+
+
             } catch (JSchException e) {
                 e.printStackTrace();
                 throw new RuntimeException("Could not create ssh session");

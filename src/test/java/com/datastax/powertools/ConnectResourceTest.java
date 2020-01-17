@@ -1,7 +1,9 @@
 package com.datastax.powertools;
 
+import com.datastax.powertools.cassandra.CassandraClusterConfiguration;
 import com.datastax.powertools.docker.DockerHelper;
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.response.ResponseBody;
 import io.restassured.response.ValidatableResponse;
@@ -27,6 +29,13 @@ public class ConnectResourceTest {
         String dockerfile = "docker/cassandra/Dockerfile";
         dh.buildDockerfile(dockerfile, imgTag);
         dh.startContainer(imgTag);
+
+        CassandraClusterConfiguration cassandraClusterConf = new CassandraClusterConfiguration();
+        cassandraClusterConf.setContactPoints("localhost");
+        given()
+                .contentType(ContentType.JSON)
+                .body(cassandraClusterConf)
+                .when().post("/connect").then().statusCode(is(200));
     }
 
     @AfterEach

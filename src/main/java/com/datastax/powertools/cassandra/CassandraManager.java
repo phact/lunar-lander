@@ -30,6 +30,15 @@ public class CassandraManager {
                 config.getContactPoints(),
                 config.getCqlPort()));
 
+        // TODO: didn't work - trying to fix native image
+        // https://docs.datastax.com/en/developer/java-driver/4.2/manual/osgi/
+        // https://github.com/oracle/graal/blob/master/substratevm/REFLECTION.md
+        /*
+        builder = builder
+                .withClassLoader(CqlSession.class.getClassLoader());
+
+         */
+
         if (config.getCqlUserName() != null) {
             builder = builder.withAuthCredentials(config.getCqlUserName(), config.getCqlPassword());
         }
