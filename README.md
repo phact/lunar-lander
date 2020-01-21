@@ -37,3 +37,6 @@ Changes to the source code are picked up automatically, it takes javascript chan
 
     ./mvnw package -Pnative
 
+## Native image build prereqs
+
+https://quarkus.io/guides/building-native-image#prerequisites
