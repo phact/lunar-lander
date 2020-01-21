@@ -72,7 +72,7 @@
                   </v-card-title>
                   <v-switch
                     :input-value="isExpanded(item)"
-                    :label="isExpanded(item) ? 'Expanded' : 'Closed'"
+                    :label="isExpanded(item) ? 'Close' : 'Expand'"
                     class="pl-4 mt-0"
                     @change="(v) => expand(item, v)"
                   ></v-switch>

@@ -1,24 +1,15 @@
 package com.datastax.powertools.missioncontrol;
 
-import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
-import com.datastax.oss.driver.api.core.context.DriverContext;
-import com.datastax.oss.driver.api.core.session.ProgrammaticArguments;
-import com.datastax.oss.driver.internal.core.config.typesafe.DefaultDriverConfigLoader;
-import com.datastax.oss.driver.internal.core.connection.ExponentialReconnectionPolicy;
-import com.datastax.oss.driver.internal.core.context.DefaultDriverContext;
 import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 
 import java.io.*;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import com.datastax.powertools.api.LanderSequence;
 import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +30,9 @@ public class MissionControlManager {
     Map<String, LanderMission> missions = new HashMap<String, LanderMission>();
     private List<CassandraNode> cluster;
     int arrMaxSize = 1024;
-    private Map<String, Session> sessions;
+    private Map<String, Session> sessions = new HashMap<>();
+    private CassandraIpType relevantIp;
+    private CassandraIpType selectedIpType = null;
 
     public void setMissions(Map<String, LanderMission> missions) {
         this.missions = missions;
@@ -48,16 +41,65 @@ public class MissionControlManager {
     public void setCluster(List<CassandraNode> cluster) {
         logger.info("Setting cluster:" + cluster);
         this.cluster = cluster;
-        this.sessions = createSessions();
+        pickRelevantIp();
+        createSessions();
     }
 
-    private Map<String, Session> createSessions() {
+    private void pickRelevantIp() {
+        CassandraNode node = cluster.get(0);
+
+        String privateKey = node.getPrivateKey();
+        String sshUser = node.getSshUser();
+
+        //TODO: maybe allow non standard ssh port?
+        int port = 22;
+        logger.info(String.format("Attempting to set ipType for ssh"));
+        EnumSet.allOf(CassandraIpType.class)
+                .forEach(ipType -> tryToSetIpType(privateKey,sshUser,port,ipType,node));
+        logger.info(String.format("ipType is i%S", this.selectedIpType));
+    }
+
+    private void tryToSetIpType(String privateKey, String sshUser, int port, CassandraIpType ipType, CassandraNode node) {
+        if (this.selectedIpType !=null)
+                return;
+        try {
+            String host = getHostFromIpType(ipType, node);
+            createSession(privateKey,sshUser,host,port);
+            this.selectedIpType = ipType;
+        } catch (Exception e) {
+            logger.info("ip type not " + ipType);
+        }
+    }
+
+    private String getHostFromIpType(CassandraIpType ipType, CassandraNode node) {
+        String host = "";
+        switch (ipType) {
+            case LISTEN:
+                host = node.getListenAddress().get().toString();
+                break;
+            case BROADCAST:
+                host = node.getBroadcastAddress().get().toString();
+                break;
+            case BROADCAST_RPC:
+                host = node.getBroadcastRpcAddress().get().toString();
+                break;
+        }
+        logger.info("host: " +host);
+        if (!host.isEmpty()) {
+            host = host.
+                    split(":")[0].
+                    split("/")[1];
+            return host;
+        }else{
+            throw new RuntimeException("no ip of type: " + ipType);
+        }
+    }
+
+    private void createSessions() {
         Map<String, Session> sessions = new HashMap<>();
         for (CassandraNode node : cluster) {
             String host;
-            host = node.getBroadcastAddress().
-                    toString().split(":")[0].
-                    split("/")[1];
+            host = getHostFromIpType(this.selectedIpType,node);
             String privateKey = node.getPrivateKey();
             String sshUser = node.getSshUser();
 
@@ -67,32 +109,37 @@ public class MissionControlManager {
             logger.info(String.format("creating ssh session for %s", host));
 
             try {
-                JSch jsch = new JSch();
-                if (privateKey != null) {
-
-                   Security.addProvider(new BouncyCastleProvider());
-                   jsch.addIdentity(sshUser, privateKey.substring(0, privateKey.length() - 1).getBytes(), null, null);
-                    logger.debug("identity added ");
-                }
-
-                Session session = jsch.getSession(sshUser, host, port);
-                logger.debug("session created.");
-
-                // We can't do host checking against new boxes constantly
-                session.setConfig("StrictHostKeyChecking", "no");
-
-                session.connect();
-                logger.debug("session connected.....");
-
-                sessions.put(host, session);
-
-
+                createSession(privateKey, sshUser, host, port);
+                continue;
             } catch (JSchException e) {
                 e.printStackTrace();
                 throw new RuntimeException("Could not create ssh session");
             }
         }
-        return sessions;
+    }
+
+    public void createSession(String privateKey, String sshUser, String host, int port) throws JSchException {
+        JSch jsch = new JSch();
+        if (privateKey != null) {
+
+            Security.addProvider(new BouncyCastleProvider());
+            jsch.addIdentity(sshUser, privateKey.substring(0, privateKey.length() - 1).getBytes(), null, null);
+            logger.debug("identity added ");
+        }
+
+        Session session = jsch.getSession(sshUser, host, port);
+        logger.debug("session created.");
+
+        //speed up timeout
+        session.setTimeout(5000);
+
+        // We can't do host checking against new boxes constantly
+        session.setConfig("StrictHostKeyChecking", "no");
+
+        session.connect();
+        logger.debug("session connected.....");
+
+        sessions.put(host, session);
     }
 
     public List<String> getMissionNames() {
