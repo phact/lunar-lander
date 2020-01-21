@@ -22,6 +22,7 @@ RUN echo "export VISIBLE=now" >> /etc/profile
 
 EXPOSE 22
 
-COPY start.sh start.sh
+COPY conf/cassandra.yaml /etc/cassandra/cassandra.yaml
+COPY entrypoint.sh entrypoint.sh
 
-CMD ./start.sh
+CMD ./entrypoint.sh

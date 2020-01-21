@@ -120,7 +120,7 @@ public class DockerHelper {
         //The port never opened
         if (!quiet)
         {
-            logger.warn("Failed to connect to {}:{} after {} sec", hostname, port, timeout.toSeconds());
+            logger.warn("Failed to connect to {}:{} after {} sec", hostname, port, timeout.toMillis()/1000);
         }
 
         return false;
@@ -230,7 +230,10 @@ public class DockerHelper {
 
     private Container searchContainer(String name) {
 
-        ListContainersCmd listContainersCmd = dockerClient.listContainersCmd().withStatusFilter(List.of("running"));
+        List<String> collection = new ArrayList<>();
+        collection.add("running");
+
+        ListContainersCmd listContainersCmd = dockerClient.listContainersCmd().withStatusFilter(collection);
         listContainersCmd.getFilters().put("name", Arrays.asList(name));
         List<Container> runningContainers = null;
         try {

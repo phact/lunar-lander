@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import com.datastax.powertools.api.LanderSequence;
 import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,16 +61,17 @@ public class MissionControlManager {
             String privateKey = node.getPrivateKey();
             String sshUser = node.getSshUser();
 
-            JSch jsch = new JSch();
 
             //TODO: maybe allow non standard ssh port?
             int port = 22;
             logger.info(String.format("creating ssh session for %s", host));
 
             try {
+                JSch jsch = new JSch();
                 if (privateKey != null) {
-                    Security.addProvider(new BouncyCastleProvider());
-                    jsch.addIdentity(sshUser, privateKey.substring(0, privateKey.length() - 1).getBytes(), null, null);
+
+                   Security.addProvider(new BouncyCastleProvider());
+                   jsch.addIdentity(sshUser, privateKey.substring(0, privateKey.length() - 1).getBytes(), null, null);
                     logger.debug("identity added ");
                 }
 

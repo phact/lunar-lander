@@ -139,7 +139,7 @@ public class LanderResource {
             missionControlManager.setCluster(cluster);
             return Response.ok(cluster).build();
         } catch (Exception e) {
-            logger.info("Could not connect to cassandra");
+            logger.info("Could not connect");
             e.printStackTrace();
             return Response.serverError().entity(e.getMessage()).build();
         }
