@@ -88,6 +88,7 @@
                         v-model="item.expectedResponse"
                         label="Expected response"
                       >{{ item.expectedResponse }}
+                      </v-text-field>
                       </v-col>
                       </v-text-field>
                     </v-list-item>
@@ -309,10 +310,7 @@
   </v-layout>
 </template>
 <script>
-import axios from 'axios'
 import Logo from '~/components/Logo.vue'
-
-const fetch = require('node-fetch');
 
 
 export default {
@@ -340,10 +338,10 @@ export default {
     components: {
       Logo,
     },
-    async asyncData() {
-      let data = await fetch("/missionNames")
+    async asyncData({ $axios }) {
+      let data = await $axios.get("/missionNames")
                 .then(res => {
-                    return res.json()
+                    return res.data
                 })
 
       //this.$data.missionNames = data;
@@ -363,9 +361,9 @@ export default {
    methods: {
     //TODO: snackbar and spinner on requests
     async getMissionNames(){
-      let data = await fetch("/missionNames")
+      let data = await this.$axios.$get("/missionNames")
                 .then(res => {
-                    return res.json()
+                    return res
                 })
 
       //this.$data.missionNames = data;
@@ -391,15 +389,15 @@ export default {
       this.sequences.splice(j,1);
     },
     async saveMission() {
-      const data = await axios.post('/mission/', {
+      const data = await this.$axios.$post('/mission/', {
         missionName: this.missionName, sequences: this.sequences
       })
       if (!data.err) {
-        //this.$data.cassandraNodes = data.data;
+        //this.$data.cassandraNodes = data;
       }
     },
     async deleteMission() {
-      const data = await axios.post('/deleteMission/', {
+      const data = await this.$axios.$post('/deleteMission/', {
         missionName: this.missionName
       })
       if (!data.err) {
@@ -407,18 +405,18 @@ export default {
         this.$data.missionName="";
         this.$data.sequences = [];
         this.$data.newType = "New";
-        //this.$data.cassandraNodes = data.data;
+        //this.$data.cassandraNodes = data;
       }
     },
     async exportMissions() {
-      const data = await axios.get('/missions/')
+      const data = await this.$axios.$get('/missions/')
       if (!data.err) {
-        alert(JSON.stringify(data.data))
+        alert(JSON.stringify(data))
       }
     },
 
     async importMissions() {
-      const data = await axios.put('/missions/', JSON.parse(this.missionsToImport))
+      const data = await this.$axios.$put('/missions/', JSON.parse(this.missionsToImport))
       if (!data.err) {
         this.getMissionNames();
       }
@@ -426,9 +424,9 @@ export default {
  
  
    async getSequences() {
-      const data = await axios.get('/getSequences/' + this.missionName)
+      const data = await this.$axios.$get('/getSequences/' + this.missionName)
       if (!data.err) {
-        this.$data.sequences = data.data;
+        this.$data.sequences = data;
       }
  
     },
@@ -436,9 +434,9 @@ export default {
       this.$set(this.$data.sequences[currentj.currentj].commands, currenti.currenti, currentcommand.currentcommand)
     },
     async executeCommand(currentcommand) {
-      const data = await axios.get('/executeCommand/' + encodeURIComponent(currentcommand.currentcommand))
+      const data = await this.$axios.$get('/executeCommand/' + encodeURIComponent(currentcommand.currentcommand))
       if (!data.err) {
-        this.$data.commandResponse = data.data;
+        this.$data.commandResponse = data;
       }
  
     },

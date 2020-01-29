@@ -46,6 +46,7 @@ export default {
   ** Nuxt.js modules
   */
   modules: [
+    '@nuxtjs/axios'
   ],
   /*
   ** vuetify module configuration
@@ -82,4 +83,7 @@ export default {
     dir: '../src/main/resources/META-INF/resources/',
     devtools: true
   },
+  axios: {
+    baseURL: "http://localhost:8080"
+  }
 }

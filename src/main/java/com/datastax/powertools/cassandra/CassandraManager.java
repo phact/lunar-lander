@@ -2,8 +2,17 @@ package com.datastax.powertools.cassandra;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.context.DriverContext;
 import com.datastax.oss.driver.api.core.metadata.Node;
+import com.datastax.oss.driver.api.core.session.ProgrammaticArguments;
+import com.datastax.oss.driver.internal.core.context.DefaultDriverContext;
+import com.datastax.oss.driver.internal.core.context.DefaultNettyOptions;
+import com.datastax.oss.driver.internal.core.context.InternalDriverContext;
+import com.datastax.oss.driver.internal.core.context.NettyOptions;
 import com.datastax.powertools.api.CassandraNode;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelOption;
 import org.jboss.logging.Logger;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -23,9 +32,40 @@ public class CassandraManager {
     private CqlSession session;
     private Logger logger = Logger.getLogger(CassandraManager.class);
 
+    // Needed for https://datastax-oss.atlassian.net/projects/JAVA/issues/JAVA-2624
+    class CustomNettyOptions extends DefaultNettyOptions {
+        public CustomNettyOptions(InternalDriverContext context) {
+            super(context);
+        }
+
+        @Override
+        public void afterBootstrapInitialized(Bootstrap bootstrap) {
+            super.afterBootstrapInitialized(bootstrap);
+            bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000);
+        }
+    }
+
+    class CustomContext extends DefaultDriverContext {
+        public CustomContext(DriverConfigLoader configLoader, ProgrammaticArguments programmaticArguments) {
+            super(configLoader, programmaticArguments);
+        }
+
+        @Override
+        protected NettyOptions buildNettyOptions() {
+            return new CustomNettyOptions(this);
+        }
+    }
+
+    class CustomSessionBuilder extends CqlSessionBuilder {
+        @Override
+        protected DriverContext buildContext(DriverConfigLoader configLoader, ProgrammaticArguments programmaticArguments) {
+            return new CustomContext(configLoader, programmaticArguments);
+        }
+    }
+
 
     public List connect(CassandraClusterConfiguration config) {
-        CqlSessionBuilder builder = CqlSession.builder();
+        CqlSessionBuilder builder = new CustomSessionBuilder();
         builder = builder.addContactPoint(InetSocketAddress.createUnresolved(
                 config.getContactPoints(),
                 config.getCqlPort()));

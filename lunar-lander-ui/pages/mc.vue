@@ -177,12 +177,9 @@
   </v-layout>
 </template>
 <script>
-import axios from 'axios'
 import Logo from '~/components/Logo.vue'
 import { mapMutations } from 'vuex'
 
-
-const fetch = require('node-fetch');
 
 
 export default {
@@ -205,10 +202,10 @@ export default {
     components: {
       Logo,
     },
-    async asyncData() {
-      let data = await fetch("/missionNames")
+    async asyncData({ $axios }) {
+      let data = await $axios.$get("/missionNames")
                 .then(res => {
-                    return res.json()
+                    return res
                 })
 
       //this.$data.missionNames = data;
@@ -233,7 +230,7 @@ export default {
       setSnack: 'snackbar/setSnack'
     }),
     async connect() {
-      const data = await axios.post('/connect', {
+      const data = await this.$axios.$post('/connect', {
         contactPoints: this.contactpoints,
         sshUser: this.sshUser,
         privateKey: this.privateKey,
@@ -241,16 +238,16 @@ export default {
         return {err: error.response.data}
       })
       if (!data.err) {
-        this.$data.cassandraNodes = data.data;
+        this.$data.cassandraNodes = data;
         this.snackTime("Connection created");
       }else {
         this.snackTime(data.err);
       }
     },
     async initiateSequence() {
-      const data = await axios.get('/initiateSequence/' + this.missionName)
+      const data = await this.$axios.$get('/initiateSequence/' + this.missionName)
       if (!data.err) {
-        this.$data.sequenceResults = data.data;
+        this.$data.sequenceResults = data;
       }
  
     },
