@@ -261,6 +261,7 @@ public class MissionControlManager {
             channel.setInputStream(null);
             ((ChannelExec) channel).setErrStream(null);
 
+            logger.info("attempting command: " + command + "on host: "+host);
             channel.connect();
             InputStream in = channel.getInputStream();
             InputStream errIn = ((ChannelExec) channel).getErrStream();
