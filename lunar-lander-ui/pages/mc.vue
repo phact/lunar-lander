@@ -162,7 +162,8 @@
         v-model="missionName"
         outlined
       ></v-select>
-      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="initiateSequence()">Initiate Sequence</v-btn>
+      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="rollingDeployment()">Rolling Deployment</v-btn>
+      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="canaryDeployment()">Canary Deployment</v-btn>
 
       <v-data-table
         v-if="sequenceResults.length >0"
@@ -244,8 +245,15 @@ export default {
         this.snackTime(data.err);
       }
     },
-    async initiateSequence() {
-      const data = await this.$axios.$get('/initiateSequence/' + this.missionName)
+    async rollingDeployment() {
+      const data = await this.$axios.$get('/rollingDeployment/' + this.missionName)
+      if (!data.err) {
+        this.$data.sequenceResults = data;
+      }
+ 
+    },
+    async canaryDeployment() {
+      const data = await this.$axios.$get('/canaryDeployment/' + this.missionName)
       if (!data.err) {
         this.$data.sequenceResults = data;
       }

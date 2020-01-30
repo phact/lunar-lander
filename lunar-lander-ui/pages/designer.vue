@@ -412,6 +412,7 @@ export default {
       const data = await this.$axios.$get('/missions/')
       if (!data.err) {
         alert(JSON.stringify(data))
+        console.log(JSON.stringify(data))
       }
     },
 

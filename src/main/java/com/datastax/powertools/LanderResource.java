@@ -1,5 +1,6 @@
 package com.datastax.powertools;
 
+import com.datastax.oss.driver.api.core.AllNodesFailedException;
 import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 import com.datastax.powertools.api.LanderSequence;
@@ -130,20 +131,35 @@ public class LanderResource {
     @POST
     public Response connect(CassandraClusterConfiguration config){
         logger.info("Connecting to " + config.getContactPoints());
+        List<CassandraNode> cluster = new ArrayList<>();
         try {
-            List<CassandraNode> cluster = cassandraManager.connect(config);
+            cluster = cassandraManager.connect(config);
             for (CassandraNode cassandraNode : cluster) {
                 cassandraNode.setPrivateKey(config.getPrivateKey());
                 cassandraNode.setSshUser(config.getSshUser());
             }
             missionControlManager.setCluster(cluster);
             return Response.ok(cluster).build();
-        } catch (Exception e) {
+       } catch (AllNodesFailedException e) {
+            for (String ip : config.getContactPoints().split(",")) {
+                InetSocketAddress address = InetSocketAddress.createUnresolved(ip,9042);
+                CassandraNode cassandraNode = new CassandraNode();
+                cassandraNode.setBroadcastRpcAddress(Optional.of(address));
+                cassandraNode.setBroadcastAddress(Optional.of(address));
+                cassandraNode.setListenAddress(Optional.of(address));
+                cassandraNode.setPrivateKey(config.getPrivateKey());
+                cassandraNode.setSshUser(config.getSshUser());
+                cluster.add(cassandraNode);
+            }
+            missionControlManager.setCluster(cluster);
+            return Response.ok(cluster).build();
+       } catch (Exception e) {
             logger.info("Could not connect");
             e.printStackTrace();
             return Response.serverError().entity(e.getMessage()).build();
         }
-    }
+
+   }
 
     @Path("/mission")
     @POST
@@ -186,17 +202,30 @@ public class LanderResource {
         }
     }
 
-    @Path("/initiateSequence/{missionName}")
+    @Path("/rollingDeployment/{missionName}")
     @GET
-    public Response initiateSequence(@PathParam("missionName") String missionName){
-        logger.info("Initiating sequence for mission " + missionName);
+    public Response rollingDeployment(@PathParam("missionName") String missionName){
+        logger.info("Initiating rolling deployment for mission " + missionName);
         try {
-            return Response.ok(missionControlManager.initiateSequence(missionName)).build();
+            return Response.ok(missionControlManager.rollingDeployment(missionName)).build();
         } catch (Exception e) {
             e.printStackTrace();
             return Response.serverError().entity(e.getMessage()).build();
         }
     }
+
+    @Path("/canaryDeployment/{missionName}")
+    @GET
+    public Response canaryDeployment(@PathParam("missionName") String missionName){
+        logger.info("Initiating canary deployment for mission " + missionName);
+        try {
+            return Response.ok(missionControlManager.canaryDeployment(missionName)).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
 
     @Path("/getSequences/{missionName}")
     @GET

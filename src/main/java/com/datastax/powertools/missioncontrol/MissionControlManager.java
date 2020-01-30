@@ -31,7 +31,6 @@ public class MissionControlManager {
     private List<CassandraNode> cluster;
     int arrMaxSize = 1024;
     private Map<String, Session> sessions = new HashMap<>();
-    private CassandraIpType relevantIp;
     private CassandraIpType selectedIpType = null;
 
     public void setMissions(Map<String, LanderMission> missions) {
@@ -41,6 +40,7 @@ public class MissionControlManager {
     public void setCluster(List<CassandraNode> cluster) {
         logger.info("Setting cluster:" + cluster);
         this.cluster = cluster;
+        selectedIpType = null;
         pickRelevantIp();
         createSessions();
     }
@@ -88,7 +88,7 @@ public class MissionControlManager {
         if (!host.isEmpty()) {
             host = host.
                     split(":")[0].
-                    split("/")[1];
+                    replaceAll("/", "");
             return host;
         }else{
             throw new RuntimeException("no ip of type: " + ipType);
@@ -152,12 +152,12 @@ public class MissionControlManager {
         return missionList;
     }
 
-    public List<SSHResponse> initiateSequence(String missionName) {
+    public List<SSHResponse> rollingDeployment(String missionName) {
         if (missions.get(missionName) == null){
             throw new RuntimeException("Mission does not exist");
         }
         LanderMission mission = missions.get(missionName);
-        List<SSHResponse> results = run(mission);
+        List<SSHResponse> results = runRolling(mission);
         /*
         if (results.stream().filter(x -> x.getStatusCode() != 0).count() > 0){
             throw new RuntimeException("execution of steps failed");
@@ -166,7 +166,43 @@ public class MissionControlManager {
         return results;
     }
 
-    private List<SSHResponse> run(LanderMission mission) {
+    public List<SSHResponse> canaryDeployment(String missionName) {
+        if (missions.get(missionName) == null){
+            throw new RuntimeException("Mission does not exist");
+        }
+        LanderMission mission = missions.get(missionName);
+        List<SSHResponse> results = runCanary(mission);
+        /*
+        if (results.stream().filter(x -> x.getStatusCode() != 0).count() > 0){
+            throw new RuntimeException("execution of steps failed");
+        }
+        */
+        return results;
+    }
+
+    private List<SSHResponse> runCanary(LanderMission mission) {
+        if (mission.getSequences().isEmpty()){
+            throw new RuntimeException("Mission has no sequences");
+        }
+        List<LanderSequence> sequences = mission.getSequences();
+
+        List<SSHResponse> responses = new ArrayList<>();
+        for (LanderSequence sequence : sequences) {
+            logger.info("Attempting to run sequence: " + sequence.getName() + " mission " + mission.getMissionName());
+
+            List<String> commands = sequence.getCommands();
+
+            String expectedResponse = sequence.getExpectedResponse();
+
+            //TODO: think about if and how to do retries (idempotent flag on the sequence?)
+            //TODO: use mustache to include node variables
+            //TODO: stick success and failiure on the cluster rather than collecting
+            responses.addAll(sshAll(commands, cluster.subList(0,1)));
+        }
+        return responses;
+    }
+
+    private List<SSHResponse> runRolling(LanderMission mission) {
         if (mission.getSequences().isEmpty()){
             throw new RuntimeException("Mission has no sequences");
         }
@@ -205,9 +241,9 @@ public class MissionControlManager {
                 responses.add(
                         ssh(
                                 command,
-                                node.getBroadcastAddress().
+                                node.getBroadcastAddress().get().
                                         toString().split(":")[0].
-                                        split("/")[1]
+                                        replaceAll("/","")
                         )
                 );
             }
@@ -298,9 +334,9 @@ public class MissionControlManager {
         }
         CassandraNode node = cluster.get(0);
         //TODO: allow different address
-        String host = node.getBroadcastAddress().
+        String host = node.getBroadcastAddress().get().
                 toString().split(":")[0].
-                split("/")[1];
+                replaceAll("/","");
         String key = node.getPrivateKey();
         String user = node.getSshUser();
         SSHResponse response = ssh(command, host);

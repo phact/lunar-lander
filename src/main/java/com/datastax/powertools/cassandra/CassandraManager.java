@@ -65,10 +65,13 @@ public class CassandraManager {
 
 
     public List connect(CassandraClusterConfiguration config) {
+        String[] contactPointArray = config.getContactPoints().split(",");
         CqlSessionBuilder builder = new CustomSessionBuilder();
-        builder = builder.addContactPoint(InetSocketAddress.createUnresolved(
-                config.getContactPoints(),
-                config.getCqlPort()));
+        for (String contactPoint : contactPointArray) {
+            builder = builder.addContactPoint(InetSocketAddress.createUnresolved(
+                    contactPoint,
+                    config.getCqlPort()));
+        }
 
         // TODO: didn't work - trying to fix native image
         // https://docs.datastax.com/en/developer/java-driver/4.2/manual/osgi/
