@@ -11,6 +11,7 @@ import com.datastax.powertools.missioncontrol.SSHResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.StartupEvent;
+import org.glassfish.jersey.server.ChunkedOutput;
 import org.jboss.logging.Logger;
 
 import javax.enterprise.event.Observes;
@@ -234,6 +235,32 @@ public class LanderResource {
         try {
             List<LanderSequence> sequences = missionControlManager.getSequencesFromMission(missionName);
             return Response.ok(sequences).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
+    @Path("/stream/{missionName}")
+    @GET
+    public Response stream(@PathParam("missionName") String missionName){
+        logger.info("Initiating stream test" + missionName);
+        ChunkedOutput<String> out = new ChunkedOutput<>(String.class, "\n");
+        Thread thread = new Thread() {
+
+            public void run() {
+                try {
+                    for (String missionName : missionControlManager.getMissionNames()) {
+                        out.write("\n" + missionName);
+                    }
+                    out.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+        try {
+                return Response.ok(out).build();
         } catch (Exception e) {
             e.printStackTrace();
             return Response.serverError().entity(e.getMessage()).build();

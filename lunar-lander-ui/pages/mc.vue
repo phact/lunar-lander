@@ -164,6 +164,7 @@
       ></v-select>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="rollingDeployment()">Rolling Deployment</v-btn>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="canaryDeployment()">Canary Deployment</v-btn>
+      <v-btn v-on:click="stream()">Stream</v-btn>
 
       <v-data-table
         v-if="sequenceResults.length >0"
@@ -180,16 +181,20 @@
 <script>
 import Logo from '~/components/Logo.vue'
 import { mapMutations } from 'vuex'
+import requestsMixin from '~/mixins/requests.js'
+
 
 
 
 export default {
+    mixins: [requestsMixin],
     data: () => {
       let data = {
           missionNames: ["puppies","kittens"],
           cassandraNodes: [],
           sequenceResults: [],
           contactpoints: "",
+          testStream: "",
           sshUser: "",
           privateKey: "",
           missionName: "",
@@ -268,6 +273,27 @@ export default {
     updateItemsPerPage (number) {
       this.itemsPerPage = number
     },
+    stream (){
+        let data="";
+        this.streamingRequest({
+            url: this.$axios.defaults.baseURL + '/stream/' + this.missionName,
+            error: function(response){
+                console.log(response);
+            },
+            success: function(response){
+                var reader = response.body.getReader();
+
+                this.readChunk(reader,  0, console.log, "done");
+
+                if (response.status == 200){
+                    console.log("started streaming")
+                }else{
+                    console.log("Launch Command Failed")
+                }
+            },
+            method: "GET",
+        })
+    }
   },
    computed: {
       numberOfPages () {

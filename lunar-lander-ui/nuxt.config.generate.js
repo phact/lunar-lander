@@ -83,6 +83,6 @@ export default {
     dir: '../src/main/resources/META-INF/resources/',
   },
   axios: {
-    baseURL: "http://localhost:8080/",
+    baseURL: "/",
   }
 }
