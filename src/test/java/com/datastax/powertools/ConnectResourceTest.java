@@ -7,10 +7,7 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.response.ResponseBody;
 import io.restassured.response.ValidatableResponse;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.util.Arrays;
 import java.util.List;
@@ -32,14 +29,17 @@ public class ConnectResourceTest {
 
         CassandraClusterConfiguration cassandraClusterConf = new CassandraClusterConfiguration();
         cassandraClusterConf.setContactPoints("localhost");
-        given()
+        Response response = given()
                 .contentType(ContentType.JSON)
                 .body(cassandraClusterConf)
-                .when().post("/connect").then().statusCode(is(200));
+                .when().post("/connect");
+
+
+        response.then().statusCode(is(200));
     }
 
-    @AfterEach
-    void tearDown() {
+    @AfterAll
+    static void tearDown() {
         dh.stopContainer();
         dh.rmContainer();
     }
