@@ -1,17 +1,13 @@
 export default {
   methods: {
-    streamingRequest({url, params, success, error, method} = {}) {
+    streamingRequest({url, params, success, error, method, readChunk, vueComponent, field} = {}) {
         var payload = {
             method: method,
             cache: "no-cache",
             mode: "cors",
             headers: {
-                "accept": "application/octet-stream",
+                "accept": "*/*",
                 "content-type": "application/json",
-                "authorization": JSON.stringify({
-                    sessionId: window.sessionStorage.getItem("sessionId"),
-                    sessionKey: window.sessionStorage.getItem("sessionKey")
-                }),
                 "cache-control": "no-cache"
             },
         };
@@ -19,8 +15,8 @@ export default {
         if (params != null){
             payload["body"] = params;
         }
-        var request = fetch(url, payload).then(function(response) {
-          success(response);
+        var request = fetch( url, payload).then(function(response) {
+          success(response, vueComponent, field);
         })
         .catch(error || function (error) {
             console.log(error);
@@ -33,7 +29,7 @@ export default {
         })
         console.log(request)
     },
-    readChunk(reader, i,  runWhenDone, args){
+    readChunk(reader, i,  field, vueComponent){
         reader.read().then(function(result){
             var decoder = new TextDecoder();
             var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
@@ -63,6 +59,7 @@ export default {
                         }
                     }
 
+                    vueComponent.$data[field][chunkObject.index] = JSON.parse(chunkObject.msg);
                     console.log(chunkObject);
 
                 }
@@ -70,14 +67,9 @@ export default {
 
             if (result.done) {
                 console.log("done")
-                if (args == null){
-                    runWhenDone()
-                }else {
-                    runWhenDone(args)
-                }
                 return;
             } else {
-                return readChunk(reader, i, runWhenDone, args);
+                return readChunk(reader, i, field, vueComponent);
             }
         });
     }

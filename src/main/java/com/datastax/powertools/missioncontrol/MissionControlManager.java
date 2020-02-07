@@ -5,9 +5,12 @@ import com.datastax.powertools.api.LanderMission;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import com.datastax.powertools.api.LanderSequence;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
@@ -26,6 +29,7 @@ import java.security.Security;
 @ApplicationScoped
 public class MissionControlManager {
 
+    private ObjectMapper mapper = new ObjectMapper();
     private static Logger logger = LoggerFactory.getLogger(MissionControlManager.class);
     Map<String, LanderMission> missions = new HashMap<String, LanderMission>();
     private List<CassandraNode> cluster;
@@ -355,5 +359,101 @@ public class MissionControlManager {
 
     public Map<String, LanderMission> getMissions() {
         return missions;
+    }
+
+    public ArrayList<CompletableFuture<ByteArrayOutputStream>> streamRollingDeployment(String missionName) {
+        ArrayList<CompletableFuture<ByteArrayOutputStream>>results = new ArrayList();
+
+        Runnable task = () -> {
+            if (missions.get(missionName) == null) {
+                throw new RuntimeException("Mission does not exist");
+            }
+
+            LanderMission mission = missions.get(missionName);
+
+            streamRunRolling(mission, results);
+        };
+
+        Thread thread = new Thread(task);
+        //thread.setDaemon(true);
+        thread.start();
+        /*
+        if (results.stream().filter(x -> x.getStatusCode() != 0).count() > 0){
+            throw new RuntimeException("execution of steps failed");
+        }
+        */
+        return results;
+    }
+
+
+    public void streamRunRolling(LanderMission mission, ArrayList<CompletableFuture<ByteArrayOutputStream>> responses){
+        if (mission.getSequences().isEmpty()){
+            throw new RuntimeException("Mission has no sequences");
+        }
+        List<LanderSequence> sequences = mission.getSequences();
+
+        for (LanderSequence sequence : sequences) {
+            logger.info("Attempting to run sequence: " + sequence.getName() + " mission " + mission.getMissionName());
+
+            List<String> commands = sequence.getCommands();
+
+            String expectedResponse = sequence.getExpectedResponse();
+
+            //TODO: think about if and how to do retries (idempotent flag on the sequence?)
+            //TODO: use mustache to include node variables
+            //TODO: stick success and failiure on the cluster rather than collecting
+            streamSSHAll(commands, cluster, responses);
+        }
+    }
+
+    private void streamSSHAll(List<String> commands, List<CassandraNode> cluster, ArrayList<CompletableFuture<ByteArrayOutputStream>> responses) {
+        if (cluster == null){
+            throw new RuntimeException("No cluster has been connected");
+        }
+        for (String command : commands) {
+            for (CassandraNode node : cluster) {
+                //TODO: allow optional usage of listen address for ssh
+                CompletableFuture<ByteArrayOutputStream> outputStreamFuture = CompletableFuture.supplyAsync(() -> {
+                    ByteArrayOutputStream response = new ByteArrayOutputStream();
+                    try {
+                        byte[] sshCommandByteArray = mapper.writeValueAsBytes(ssh(
+                                command,
+                                node.getBroadcastAddress().get().
+                                        toString().split(":")[0].
+                                        replaceAll("/", "")
+                                )
+                        );
+                        response.write(sshCommandByteArray);
+                        response.write("\n\n".getBytes("UTF8"));
+                        response.flush();
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    return response;
+                });
+                responses.add(outputStreamFuture);
+           }
+        }
+        /*
+            responses.add(CompletableFuture.supplyAsync(() -> {
+                logger.warn("waiting now ");
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                logger.warn("waited");
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try {
+                    out.write("Testing".getBytes());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                return out;
+            }));
+
+         */
     }
 }

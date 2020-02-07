@@ -152,9 +152,10 @@
 
       </v-data-iterator>
 
-      </v-container fluid>
         
       <v-btn v-if="cassandraNodes.length === 0" v-on:click="connect()">Connect</v-btn>
+      <v-btn v-if="cassandraNodes.length != 0" v-on:click="connect()">Reconnect</v-btn>
+
       <v-select
         v-if="cassandraNodes.length > 0" 
         :items="missionNames"
@@ -163,6 +164,7 @@
         outlined
       ></v-select>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="rollingDeployment()">Rolling Deployment</v-btn>
+      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="streamRollingDeployment()">Stream Rolling Deployment</v-btn>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="canaryDeployment()">Canary Deployment</v-btn>
       <v-btn v-on:click="stream()">Stream</v-btn>
 
@@ -170,9 +172,12 @@
         v-if="sequenceResults.length >0"
         :headers="Object.keys(sequenceResults[0]).map(x => {return {'text':x, 'value':x}})"
         :items="sequenceResults"
+        :item-key="''+command + '-' + host"
         :items-per-page="5"
         class="elevation-1"
       ></v-data-table>
+
+      </v-container fluid>
 
       </v-card-text>
    </v-card>
@@ -273,17 +278,65 @@ export default {
     updateItemsPerPage (number) {
       this.itemsPerPage = number
     },
-    stream (){
-        let data="";
+    streamRollingDeployment (){
+        this.$data.sequenceResults = [];
         this.streamingRequest({
-            url: this.$axios.defaults.baseURL + '/stream/' + this.missionName,
+            url: this.$axios.defaults.baseURL + 'streamRollingDeployment/' + this.missionName,
             error: function(response){
                 console.log(response);
             },
-            success: function(response){
+            success: function(response, vueComponent, field){
                 var reader = response.body.getReader();
+                const STATUS_DELIMITER = "\n\n";
 
-                this.readChunk(reader,  0, console.log, "done");
+                let readChunk  = function(reader, i, field, vueComponent){
+
+                    reader.read().then(function(result){
+                        var decoder = new TextDecoder();
+                        var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
+                        chunk.split("\n").forEach((chunkedLine) => {
+                            if (chunkedLine.trim().length != 0){
+                                var chunkObject = {
+                                    "index" : i,
+                                    "msg": chunkedLine,
+                                }
+                                i = i + 1;
+
+                                //console.log(chunkedLine);
+
+                                if (chunkedLine.indexOf(STATUS_DELIMITER) != -1){
+                                    status = chunkedLine.substr(12);
+                                    chunkObject.msg = "exited with Status code " + status;
+                                    if (status == 0){
+                                        console.log(command + " Succeeded", "Success")
+                                    }
+                                    else if (status == 1){
+                                        console.log(command + " Not Found", "Error")
+                                    }
+                                    else {
+                                        console.log(command + " Failed", "Error")
+                                    }
+                                }
+
+                                vueComponent.$data[field][chunkObject.index] = JSON.parse(chunkObject.msg);
+
+                                vueComponent.$forceUpdate();
+                                console.log(chunkObject);
+
+                            }
+                        });
+
+                        if (result.done) {
+                            console.log("done")
+                            return;
+                        } else {
+                            return readChunk(reader, i, field, vueComponent);
+                        }
+                    });
+     
+                }
+
+                readChunk(reader,  0, field, vueComponent);
 
                 if (response.status == 200){
                     console.log("started streaming")
@@ -292,8 +345,81 @@ export default {
                 }
             },
             method: "GET",
+            vueComponent: this,
+            field: "sequenceResults"
         })
-    }
+    },
+    stream (){
+        this.$data.sequenceResults = [];
+        this.streamingRequest({
+            url: this.$axios.defaults.baseURL + 'stream/' + "puppies",
+            error: function(response){
+                console.log(response);
+            },
+            success: function(response, vueComponent, field){
+                var reader = response.body.getReader();
+                const STATUS_DELIMITER = "\n\n";
+
+                let readChunk  = function(reader, i, field, vueComponent){
+
+                    reader.read().then(function(result){
+                        var decoder = new TextDecoder();
+                        var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
+                        chunk.split("\n").forEach((chunkedLine) => {
+                            if (chunkedLine.trim().length != 0){
+                                var chunkObject = {
+                                    "index" : i,
+                                    "msg": chunkedLine,
+                                }
+                                i = i + 1;
+
+                                //console.log(chunkedLine);
+
+                                if (chunkedLine.indexOf(STATUS_DELIMITER) != -1){
+                                    status = chunkedLine.substr(12);
+                                    chunkObject.msg = "exited with Status code " + status;
+                                    if (status == 0){
+                                        console.log(command + " Succeeded", "Success")
+                                    }
+                                    else if (status == 1){
+                                        console.log(command + " Not Found", "Error")
+                                    }
+                                    else {
+                                        console.log(command + " Failed", "Error")
+                                    }
+                                }
+
+                                vueComponent.$data[field][chunkObject.index] = chunkObject.msg;
+
+                                vueComponent.$forceUpdate();
+                                console.log(chunkObject);
+
+                            }
+                        });
+
+                        if (result.done) {
+                            console.log("done")
+                            return;
+                        } else {
+                            return readChunk(reader, i, field, vueComponent);
+                        }
+                    });
+     
+                }
+
+                readChunk(reader,  0, field, vueComponent);
+
+                if (response.status == 200){
+                    console.log("started streaming")
+                }else{
+                    console.log("Launch Command Failed")
+                }
+            },
+            method: "GET",
+            vueComponent: this,
+            field: "sequenceResults"
+        })
+      }
   },
    computed: {
       numberOfPages () {

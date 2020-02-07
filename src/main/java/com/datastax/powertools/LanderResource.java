@@ -11,7 +11,6 @@ import com.datastax.powertools.missioncontrol.SSHResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.StartupEvent;
-import org.glassfish.jersey.server.ChunkedOutput;
 import org.jboss.logging.Logger;
 
 import javax.enterprise.event.Observes;
@@ -19,10 +18,11 @@ import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.io.IOException;
-import java.io.InputStream;
+import javax.ws.rs.core.StreamingOutput;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.*;
 
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -30,6 +30,8 @@ import java.util.*;
 public class LanderResource {
 
     private static final Logger logger = Logger.getLogger(LanderResource.class);
+
+    ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
 
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -215,9 +217,110 @@ public class LanderResource {
         }
     }
 
+    public class SSHResponseStreamingOutput implements StreamingOutput {
+        private final String missionName;
+
+        public SSHResponseStreamingOutput(String missionName) {
+            this.missionName = missionName;
+        }
+
+        @Override
+        public void write(OutputStream outputStream) throws IOException, WebApplicationException {
+           ArrayList<CompletableFuture<ByteArrayOutputStream>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName);
+            Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream));
+
+            // TODO - figure out a way to get this to work without sleeping at the beginning
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            for (CompletableFuture<ByteArrayOutputStream> outputStreamFuture : outputStreamFutureList) {
+                try {
+                    outputStreamFuture.thenApplyAsync(os -> {
+                        try {
+                            writer.write(os.toString());
+                            writer.write("\n\n");
+                            writer.flush();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        logger.warn("writing sshresult to the stream: " + os.toString());
+                        /*
+                        byte[] byteArray = os.toByteArray();
+                        try {
+                            outputStream.write(os.toByteArray());
+                            outputStream.flush();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                         */
+                        return os;
+                    });
+                    outputStreamFuture.get();
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
+                }
+
+            }
+
+            // TODO - figure out a way to get this to work without sleeping at the end
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    @Path("/streamRollingDeployment/{missionName}")
+    @GET
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    public CompletionStage<Response> streamRollingDeployment(@PathParam("missionName") String missionName){
+        logger.info("Initiating streaming rolling deployment for mission " + missionName);
+
+        return CompletableFuture.supplyAsync(() -> {
+            StreamingOutput out = new SSHResponseStreamingOutput(missionName);
+            return (Response.ok().entity(out).build());
+        }, executor);
+        /*
+        Thread thread = new Thread() {
+            public void run() {
+                logger.warn("running thread");
+                try {
+                    out.write(BufferedOutputStream.nullOutputStream());
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        };
+
+        thread.setDaemon(true);
+        thread.start();
+         */
+    }
+
+
     @Path("/canaryDeployment/{missionName}")
     @GET
     public Response canaryDeployment(@PathParam("missionName") String missionName){
+        logger.info("Initiating canary deployment for mission " + missionName);
+        try {
+            return Response.ok(missionControlManager.canaryDeployment(missionName)).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
+    @Path("/streamCanaryDeployment/{missionName}")
+    @GET
+    public Response streamCanaryDeployment(@PathParam("missionName") String missionName){
         logger.info("Initiating canary deployment for mission " + missionName);
         try {
             return Response.ok(missionControlManager.canaryDeployment(missionName)).build();
@@ -241,29 +344,47 @@ public class LanderResource {
         }
     }
 
-    @Path("/stream/{missionName}")
-    @GET
-    public Response stream(@PathParam("missionName") String missionName){
-        logger.info("Initiating stream test" + missionName);
-        ChunkedOutput<String> out = new ChunkedOutput<>(String.class, "\n");
-        Thread thread = new Thread() {
-
-            public void run() {
+    public class TestStreamingOutput implements StreamingOutput {
+        @Override
+        public void write(OutputStream outputStream) throws IOException, WebApplicationException {
+            Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream));
+            for (String name : missionControlManager.getMissionNames()) {
+                writer.write(name);
+                writer.write("\n\n");
+                writer.flush();
                 try {
-                    for (String missionName : missionControlManager.getMissionNames()) {
-                        out.write("\n" + missionName);
-                    }
-                    out.close();
-                } catch (Exception e) {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
+            writer.close();
+        }
+    }
+
+    @Path("/stream/{missionName}")
+    @Produces(MediaType.TEXT_PLAIN)
+    @GET
+    public Response stream(@PathParam("missionName") String missionName){
+        logger.info("Initiating stream test" + missionName);
+        StreamingOutput out = new TestStreamingOutput();
+        Thread thread = new Thread() {
+            public void run() {
+                try {
+                    out.write(OutputStream.nullOutputStream());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                };
+            }
         };
+
+        //thread.setDaemon(true);
+        thread.start();
         try {
-                return Response.ok(out).build();
+            return (Response.ok().entity(out).build());
         } catch (Exception e) {
             e.printStackTrace();
-            return Response.serverError().entity(e.getMessage()).build();
+            return (Response.serverError().entity(e.getMessage()).build());
         }
     }
 }
