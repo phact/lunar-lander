@@ -12,11 +12,12 @@
       <logo />
     </div>
     </v-flex>
- 
-      <v-card
-        min-width="600px"
-        width="100%"
-      >
+
+    <v-card
+      min-width="600px"
+      width="100%"
+      v-if="missionNames != null"
+    >
       <v-card-text>
        <v-text-field
          v-model="contactpoints"
@@ -35,16 +36,19 @@
        ></v-textarea>
  
        
-   <!--    <ul> -->
-   <!--    <li v-for="mission in missions"> -->
-   <!--    <span -->
-   <!--    >{{mission}}</span> -->
-   <!--    </li> -->
-   <!--    </ul> -->
-
+<!--       <ul> -->
+<!--       <li v-for="cassandraNode in cassandraNodes">  -->
+<!--       <span  -->
+<!--       >{{cassandraNode.broadcastAddress}}</span>  -->
+<!--       </li>  -->
+<!--       </ul>  -->
+        
+      <v-btn v-if="cassandraNodes.length === 0" v-on:click="connect()">Connect</v-btn>
+      <v-btn v-if="cassandraNodes.length != 0" v-on:click="connect()">Reconnect</v-btn>
 
        <v-container fluid>
 
+      
        <v-data-iterator
           v-if="cassandraNodes.length > 0"
           :items="cassandraNodes"
@@ -152,10 +156,9 @@
 
       </v-data-iterator>
 
-        
-      <v-btn v-if="cassandraNodes.length === 0" v-on:click="connect()">Connect</v-btn>
-      <v-btn v-if="cassandraNodes.length != 0" v-on:click="connect()">Reconnect</v-btn>
+      <v-spacer/>
 
+      <v-row>
       <v-select
         v-if="cassandraNodes.length > 0" 
         :items="missionNames"
@@ -163,19 +166,25 @@
         v-model="missionName"
         outlined
       ></v-select>
-      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="rollingDeployment()">Rolling Deployment</v-btn>
-      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="streamRollingDeployment()">Stream Rolling Deployment</v-btn>
+      </v-row>
+
+      <v-row>
+      <!-- <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="rollingDeployment()">Rolling Deployment</v-btn> -->
+      <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="streamRollingDeployment()">Rolling Deployment</v-btn>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="canaryDeployment()">Canary Deployment</v-btn>
-      <v-btn v-on:click="stream()">Stream</v-btn>
+      <!-- <<v-btn v-on:click="stream()">Stream</v-btn> -->
+      </v-row>
 
       <v-data-table
         v-if="sequenceResults.length >0"
         :headers="Object.keys(sequenceResults[0]).map(x => {return {'text':x, 'value':x}})"
         :items="sequenceResults"
-        :item-key="''+command + '-' + host"
         :items-per-page="5"
         class="elevation-1"
       ></v-data-table>
+    <!--    :item-key="''+command + '-' + host"  -->
+
+      </v-row>
 
       </v-container fluid>
 
@@ -185,7 +194,7 @@
 </template>
 <script>
 import Logo from '~/components/Logo.vue'
-import { mapMutations } from 'vuex'
+import { mapMutations, mapGetters } from 'vuex'
 import requestsMixin from '~/mixins/requests.js'
 
 
@@ -193,13 +202,12 @@ import requestsMixin from '~/mixins/requests.js'
 
 export default {
     mixins: [requestsMixin],
-    data: () => {
+   data: () => {
       let data = {
           missionNames: ["puppies","kittens"],
-          cassandraNodes: [],
           sequenceResults: [],
+          //cassandraNodes: [],
           contactpoints: "",
-          testStream: "",
           sshUser: "",
           privateKey: "",
           missionName: "",
@@ -213,16 +221,15 @@ export default {
     components: {
       Logo,
     },
-    async asyncData({ $axios }) {
+    async asyncData({ $axios, store }) {
       let data = await $axios.$get("/missionNames")
                 .then(res => {
                     return res
                 })
 
-      //this.$data.missionNames = data;
-      return { 
+      return {
           missionNames: data,
-      };
+      }
     },
  
     head () {
@@ -233,13 +240,21 @@ export default {
       }
     },
    methods: {
-    snackTime: function (snack) {
+    mutateSnack: function (snack) {
       this.setSnack(snack)
       //this.$router.push('/')
     },
     ...mapMutations({
       setSnack: 'snackbar/setSnack'
     }),
+    setCassandraNodes: function (cassandraNodes) {
+      this.updateCassandraNodes(cassandraNodes)
+      //this.$router.push('/')
+    },
+    ...mapMutations({
+      updateCassandraNodes: 'connection/updateCassandraNodes'
+    }),
+ 
     async connect() {
       const data = await this.$axios.$post('/connect', {
         contactPoints: this.contactpoints,
@@ -249,10 +264,12 @@ export default {
         return {err: error.response.data}
       })
       if (!data.err) {
-        this.$data.cassandraNodes = data;
-        this.snackTime("Connection created");
+        //this.$data.cassandraNodes = data;
+        this.setCassandraNodes(data);
+        this.mutateSnack("Connection created");
+        this.$forceUpdate();
       }else {
-        this.snackTime(data.err);
+        this.mutateSnack(data.err);
       }
     },
     async rollingDeployment() {
@@ -318,16 +335,16 @@ export default {
                                     }
                                 }
 
-                                vueComponent.$data[field][chunkObject.index] = JSON.parse(chunkObject.msg);
+                                vueComponent.$data[field].unshift(JSON.parse(chunkObject.msg));
 
                                 vueComponent.$forceUpdate();
-                                console.log(chunkObject);
 
                             }
                         });
 
                         if (result.done) {
                             console.log("done")
+                            console.log(JSON.stringify(vueComponent.$data[field]));
                             return;
                         } else {
                             return readChunk(reader, i, field, vueComponent);
@@ -349,82 +366,21 @@ export default {
             field: "sequenceResults"
         })
     },
-    stream (){
-        this.$data.sequenceResults = [];
-        this.streamingRequest({
-            url: this.$axios.defaults.baseURL + 'stream/' + "puppies",
-            error: function(response){
-                console.log(response);
-            },
-            success: function(response, vueComponent, field){
-                var reader = response.body.getReader();
-                const STATUS_DELIMITER = "\n\n";
-
-                let readChunk  = function(reader, i, field, vueComponent){
-
-                    reader.read().then(function(result){
-                        var decoder = new TextDecoder();
-                        var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
-                        chunk.split("\n").forEach((chunkedLine) => {
-                            if (chunkedLine.trim().length != 0){
-                                var chunkObject = {
-                                    "index" : i,
-                                    "msg": chunkedLine,
-                                }
-                                i = i + 1;
-
-                                //console.log(chunkedLine);
-
-                                if (chunkedLine.indexOf(STATUS_DELIMITER) != -1){
-                                    status = chunkedLine.substr(12);
-                                    chunkObject.msg = "exited with Status code " + status;
-                                    if (status == 0){
-                                        console.log(command + " Succeeded", "Success")
-                                    }
-                                    else if (status == 1){
-                                        console.log(command + " Not Found", "Error")
-                                    }
-                                    else {
-                                        console.log(command + " Failed", "Error")
-                                    }
-                                }
-
-                                vueComponent.$data[field][chunkObject.index] = chunkObject.msg;
-
-                                vueComponent.$forceUpdate();
-                                console.log(chunkObject);
-
-                            }
-                        });
-
-                        if (result.done) {
-                            console.log("done")
-                            return;
-                        } else {
-                            return readChunk(reader, i, field, vueComponent);
-                        }
-                    });
-     
-                }
-
-                readChunk(reader,  0, field, vueComponent);
-
-                if (response.status == 200){
-                    console.log("started streaming")
-                }else{
-                    console.log("Launch Command Failed")
-                }
-            },
-            method: "GET",
-            vueComponent: this,
-            field: "sequenceResults"
-        })
-      }
   },
    computed: {
       numberOfPages () {
         return Math.ceil(this.cassandraNodes.length / this.itemsPerPage)
       },
+      cassandraNodes() {
+        return this.$store.state.connection.cassandraNodes
+      }
     },
+  created: function () {
+    this.$store.watch(state => state.connection.cassandraNodes, () => {
+      const cassandraNodes = this.$store.state.connection.cassandraNodes
+      //this.$data.cassandraNodes = cassandraNodes;
+      //debugger
+    })
+  }
 }
 </script>
