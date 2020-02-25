@@ -8,7 +8,7 @@ import com.datastax.powertools.cassandra.CassandraClusterConfiguration;
 import com.datastax.powertools.cassandra.CassandraManager;
 import com.datastax.powertools.missioncontrol.MissionControlManager;
 import com.datastax.powertools.missioncontrol.SSHResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.datastax.powertools.util.ThreadFactoryWithName;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.StartupEvent;
@@ -36,7 +36,7 @@ public class LanderResource {
     private ObjectMapper mapper = new ObjectMapper();
 
     ThreadPoolExecutor executorPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
-    Executor executor = Executors.newSingleThreadExecutor();
+    Executor executor = Executors.newSingleThreadExecutor(new ThreadFactoryWithName("lander-worker"));
 
     ObjectMapper objectMapper = new ObjectMapper();
 
