@@ -24,8 +24,8 @@ jobs:
     - name: echo JAVA_HOME
       run: echo $JAVA_HOME 
       
-    - name: ls java
-      run: ls /opt/hostedtoolcache/jdk/13.0.0/x64
+    - name: install native-image
+      run: /opt/hostedtoolcache/jdk/13.0.0/x64/bin/gu native-image
       
-#    - name: Build with Maven
-#      run: mvn clean package -DskipTests -Pnative
+    - name: Build with Maven
+      run: mvn clean package -DskipTests -Pnative
