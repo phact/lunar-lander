@@ -35,7 +35,8 @@ public class LanderResource {
 
     private ObjectMapper mapper = new ObjectMapper();
 
-    ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
+    ThreadPoolExecutor executorPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
+    Executor executor = Executors.newSingleThreadExecutor();
 
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -230,7 +231,7 @@ public class LanderResource {
 
         @Override
         public void write(OutputStream outputStream) throws IOException, WebApplicationException {
-            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName);
+            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName, executor);
             Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream));
 
             int targetCount = missionControlManager.getStages(missionName);
@@ -245,7 +246,7 @@ public class LanderResource {
             AtomicInteger completedCount = new AtomicInteger(0);
 
             for (CompletableFuture<SSHResponse> sshResponseFuture: outputStreamFutureList) {
-                sshResponseFuture.thenApply(sshResponse -> {
+                sshResponseFuture.thenApplyAsync(sshResponse -> {
                     String sshResponseString = null;
                     synchronized (writer) {
                         try {
@@ -261,7 +262,7 @@ public class LanderResource {
                     completedCount.getAndIncrement();
 
                     return sshResponseString;
-                });
+                }, executor);
             }
 
             while (completedCount.get() < targetCount)
@@ -283,7 +284,7 @@ public class LanderResource {
         return CompletableFuture.supplyAsync(() -> {
             StreamingOutput out = new SSHResponseStreamingOutput(missionName);
             return (Response.ok().entity(out).build());
-        }, executor);
+        }, executorPool);
         /*
         Thread thread = new Thread() {
             public void run() {

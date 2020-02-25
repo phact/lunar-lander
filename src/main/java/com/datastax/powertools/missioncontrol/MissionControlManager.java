@@ -4,12 +4,14 @@ import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 import com.datastax.powertools.api.LanderSequence;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
@@ -56,7 +58,17 @@ public class MissionControlManager {
         //TODO: maybe allow non standard ssh port?
         int port = 22;
         logger.info(String.format("Attempting to set ipType for ssh"));
-        EnumSet.allOf(CassandraIpType.class)
+        EnumSet.allOf(CassandraIpType.class).stream()
+                .sorted((x, y) -> {
+                    // try listen last because Listen address is only present in system.local, not system.peers, so this information is only available for the control host.
+                    if (x.equals(CassandraIpType.LISTEN)){
+                        return 1;
+                    } else if (y.equals(CassandraIpType.LISTEN)){
+                        return -1;
+                    } else  {
+                        return x.compareTo(y);
+                    }
+                })
                 .forEach(ipType -> tryToSetIpType(privateKey,sshUser,port,ipType,node));
         if (this.selectedIpType == null){
             logger.error("Could not connect to any address, make sure the contact points are accessible on the network");
@@ -78,48 +90,68 @@ public class MissionControlManager {
     }
 
     private String getHostFromIpType(CassandraIpType ipType, CassandraNode node) {
-        String host = "";
+        InetSocketAddress inethost = null;
         switch (ipType) {
             case LISTEN:
-                host = node.getListenAddress().get().toString();
+                inethost = node.getListenAddress().orElse(null);
                 break;
             case BROADCAST:
-                host = node.getBroadcastAddress().get().toString();
+                inethost = node.getBroadcastAddress().orElse(null);
                 break;
             case BROADCAST_RPC:
-                host = node.getBroadcastRpcAddress().get().toString();
+                inethost = node.getBroadcastRpcAddress().orElse(null);
                 break;
         }
-        logger.info("host: " +host);
-        if (!host.isEmpty()) {
-            host = host.
-                    split(":")[0].
-                    replaceAll("/", "");
-            return host;
-        }else{
-            throw new RuntimeException("no ip of type: " + ipType);
+        String host;
+        if (inethost != null){
+            host = inethost.toString();
+            logger.info("host: " +host);
+            if (!host.isEmpty()) {
+                host = host.
+                        split(":")[0].
+                        replaceAll("/", "");
+                return host;
+            }else{
+                throw new RuntimeException("no ip of type: " + ipType);
+            }
         }
+        throw new RuntimeException("no ip of type: " + ipType);
     }
 
     private void createSessions() {
         Map<String, Session> sessions = new HashMap<>();
+        List<CompletableFuture<Boolean>> connectFutures = new ArrayList();
         for (CassandraNode node : cluster) {
-            String host;
-            host = getHostFromIpType(this.selectedIpType,node);
-            String privateKey = node.getPrivateKey();
-            String sshUser = node.getSshUser();
+
+            CompletableFuture<Boolean> connectFuture = new CompletableFuture<>().supplyAsync(() -> {
+                String host;
+                host = getHostFromIpType(this.selectedIpType,node);
+                String privateKey = node.getPrivateKey();
+                String sshUser = node.getSshUser();
 
 
-            //TODO: maybe allow non standard ssh port?
-            int port = 22;
-            logger.info(String.format("creating ssh session for %s", host));
+                //TODO: maybe allow non standard ssh port?
+                int port = 22;
+                logger.info(String.format("creating ssh session for %s", host));
 
+                try {
+                    createSession(privateKey, sshUser, host, port);
+                } catch (JSchException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Could not create ssh session");
+                }
+                return true;
+            });
+
+            connectFutures.add(connectFuture);
+        }
+        for (CompletableFuture<Boolean> connectFuture : connectFutures) {
             try {
-                createSession(privateKey, sshUser, host, port);
-                continue;
-            } catch (JSchException e) {
+                connectFuture.get();
+            } catch (InterruptedException e) {
                 e.printStackTrace();
-                throw new RuntimeException("Could not create ssh session");
+            } catch (ExecutionException e) {
+                e.printStackTrace();
             }
         }
     }
@@ -247,7 +279,7 @@ public class MissionControlManager {
                 responses.add(
                         ssh(
                                 command,
-                                node.getBroadcastAddress().get().
+                                node.getBroadcastAddress().orElse(null).
                                         toString().split(":")[0].
                                         replaceAll("/","")
                         )
@@ -344,7 +376,7 @@ public class MissionControlManager {
         }
         CassandraNode node = cluster.get(0);
         //TODO: allow different address
-        String host = node.getBroadcastAddress().get().
+        String host = node.getBroadcastAddress().orElse(null).
                 toString().split(":")[0].
                 replaceAll("/","");
         String key = node.getPrivateKey();
@@ -366,7 +398,7 @@ public class MissionControlManager {
         return missions;
     }
 
-    public ArrayList<CompletableFuture<SSHResponse>> streamRollingDeployment(String missionName) {
+    public ArrayList<CompletableFuture<SSHResponse>> streamRollingDeployment(String missionName, Executor executor) {
         ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures = new ArrayList();
 
         Runnable task = () -> {
@@ -376,7 +408,7 @@ public class MissionControlManager {
 
             LanderMission mission = missions.get(missionName);
 
-            streamRunRolling(mission, outputStreamFutures);
+            streamRunRolling(mission, outputStreamFutures, executor);
         };
 
         Thread thread = new Thread(task);
@@ -386,12 +418,15 @@ public class MissionControlManager {
     }
 
 
-    public void streamRunRolling(LanderMission mission, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures){
+    public void streamRunRolling(LanderMission mission, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures, Executor executor){
         if (mission.getSequences().isEmpty()){
             throw new RuntimeException("Mission has no sequences");
         }
         List<LanderSequence> sequences = mission.getSequences();
 
+        CompletableFuture<SSHResponse> sshFuture = new CompletableFuture<>().supplyAsync(() -> {
+            return null;
+        });
         for (LanderSequence sequence : sequences) {
             logger.info("Attempting to run sequence: " + sequence.getName() + " mission " + mission.getMissionName());
 
@@ -402,30 +437,27 @@ public class MissionControlManager {
             //TODO: think about if and how to do retries (idempotent flag on the sequence?)
             //TODO: use mustache to include node variables
             //TODO: stick success and failiure on the cluster rather than collecting
-            streamSSHAll(commands, cluster, outputStreamFutures);
+            sshFuture = streamSSHAll(commands, cluster, outputStreamFutures, sshFuture, executor);
         }
     }
 
-    private void streamSSHAll(List<String> commands, List<CassandraNode> cluster, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures) {
+    private CompletableFuture<SSHResponse> streamSSHAll(List<String> commands, List<CassandraNode> cluster, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures, CompletableFuture<SSHResponse> sshFuture, Executor executor) {
         if (cluster == null){
             throw new RuntimeException("No cluster has been connected");
         }
 
         for (CassandraNode node : cluster) {
-            CompletableFuture<SSHResponse> sshFuture = new CompletableFuture<>().supplyAsync(() -> {
-                return null;
-            });
             for (String command : commands) {
                 //TODO: allow optional usage of listen address for ssh
-                sshFuture = sshFuture.thenApply((response) -> {
+                sshFuture = sshFuture.thenApplyAsync((response) -> {
                     response = ssh(
                             command,
-                            node.getBroadcastAddress().get().
+                            node.getBroadcastAddress().orElse(null).
                                     toString().split(":")[0].
                                     replaceAll("/", "")
                     );
                     return response;
-                });
+                }, executor);
 
                 //outputStreamFutures.add(outputStreamFuture);
                 outputStreamFutures.add(sshFuture);
@@ -452,6 +484,7 @@ public class MissionControlManager {
             }));
 
          */
+        return sshFuture;
     }
 
     public int getStages(String missionName) {
