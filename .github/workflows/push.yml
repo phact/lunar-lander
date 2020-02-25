@@ -1,0 +1,24 @@
+name: Java CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      
+    - name: Pull a GRAALVM JDK
+      run: wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-19.3.1/graalvm-ce-java11-linux-amd64-19.3.1.tar.gz
+    - name: Setup Java JDK
+      uses: actions/setup-java@v1.3.0
+      with:
+        java-version: 13
+        java-package: jdk
+        # Path to where the compressed JDK is located. The path could be in your source repository or a local path on the agent.
+        jdkFile: graalvm-ce-java11-linux-amd64-19.3.1.tar.gz
+      
+    - name: Build with Maven
+      run: mvn clean package -DskipTests
