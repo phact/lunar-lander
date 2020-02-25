@@ -64,14 +64,14 @@ jobs:
           java-package: jdk
           # Path to where the compressed JDK is located. The path could be in your source repository or a local path on the agent.
           jdkFile: graalvm-ce-java11-darwin-amd64-19.3.1.tar.gz
-      - name: echo JAVA_HOME
-        run: echo $JAVA_HOME
-      - name: ls java home
-        run: ls /Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home
       - name: set java home
         run: export JAVA_HOME=/Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home
+      - name: set graalvm home
+        run: export GRAALVM_HOME=/Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home
+      - name: set path
+        run: export export PATH=$JAVA_HOME/bin:$PATH
       - name: install native-image
-        run: /Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home/bin/gu install native-image
+        run: gu install native-image
       - name: Build with Maven
         run: mvn clean package -DskipTests -Pnative
         
