@@ -7,6 +7,21 @@ on:
 name: Release
 
 jobs:
+  create-release:
+    name: create release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+ 
   linux-build:
     name: Linux Build
     runs-on: ubuntu-latest
@@ -29,17 +44,7 @@ jobs:
       - name: Build with Maven
         run: mvn clean package -DskipTests -Pnative
         
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-      - name: ls target
+     - name: ls target
         run: ls target
       - name: Upload Release Asset
         id: upload-release-asset
@@ -74,16 +79,6 @@ jobs:
           JAVA_HOME: /Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home
         run: mvn clean package -DskipTests -Pnative
         
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
       - name: ls target
         run: ls target
       - name: Upload Release Asset
