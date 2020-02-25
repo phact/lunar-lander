@@ -22,8 +22,10 @@ jobs:
         jdkFile: graalvm-ce-java11-linux-amd64-19.3.1.tar.gz
       
     - name: echo JAVA_HOME
-      run: echo JAVA_HOME 
+      run: echo $JAVA_HOME 
       
+    - name: ls java
+      run: ls /opt/hostedtoolcache/jdk/13.0.0/x64
       
 #    - name: Build with Maven
 #      run: mvn clean package -DskipTests -Pnative
