@@ -68,6 +68,8 @@ jobs:
         run: echo $JAVA_HOME
       - name: ls java home
         run: ls /Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home
+      - name: set java home
+        run: export JAVA_HOME=/Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home
       - name: install native-image
         run: /Users/runner/hostedtoolcache/jdk/13.0.0/x64/Contents/Home/bin/gu install native-image
       - name: Build with Maven
