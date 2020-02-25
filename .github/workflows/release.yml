@@ -48,6 +48,7 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: lunar-lander-1.0.0-SNAPSHOT-runner
           asset_name: lunar-lander-1.0.0-SNAPSHOT-runner-linux
+          asset_content_type: text/html
 
   osx-build:
     name: Darwin Build
@@ -90,3 +91,4 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: lunar-lander-1.0.0-SNAPSHOT-runner
           asset_name: lunar-lander-1.0.0-SNAPSHOT-runner-darwin
+          asset_content_type: text/html
