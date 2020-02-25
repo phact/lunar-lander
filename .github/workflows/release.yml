@@ -21,6 +21,15 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
+      - name: Copy release URL into file
+        run: |
+          mkdir release
+          printf "%s" "${{ steps.create_release.outputs.upload_url }}" > release/url.txt
+      - name: Stash file containing the release URL as an artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: release-url
+          path: ./release
  
   linux-build:
     name: Linux Build
@@ -46,13 +55,22 @@ jobs:
 
       - name: ls target
         run: ls target
+
+      - name: Retrieve stashed release URL
+        uses: actions/download-artifact@v1
+        with:
+          name: release-url
+      - name: Read release URL
+        id: get_release_url
+        run: echo ::set-output name=URL::$(cat release-url/url.txt)
+
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ steps.get_release_url.outputs.URL }}
           asset_path: target/lunar-lander-1.0.0-SNAPSHOT-runner
           asset_name: lunar-lander-1.0.0-SNAPSHOT-runner-linux
           asset_content_type: text/html
@@ -81,13 +99,22 @@ jobs:
         
       - name: ls target
         run: ls target
+
+      - name: Retrieve stashed release URL
+        uses: actions/download-artifact@v1
+        with:
+          name: release-url
+      - name: Read release URL
+        id: get_release_url
+        run: echo ::set-output name=URL::$(cat release-url/url.txt)
+
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ steps.get_release_url.outputs.URL }}
           asset_path: target/lunar-lander-1.0.0-SNAPSHOT-runner
           asset_name: lunar-lander-1.0.0-SNAPSHOT-runner-darwin
           asset_content_type: text/html
