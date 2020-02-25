@@ -8,6 +8,7 @@ import com.datastax.powertools.cassandra.CassandraClusterConfiguration;
 import com.datastax.powertools.cassandra.CassandraManager;
 import com.datastax.powertools.missioncontrol.MissionControlManager;
 import com.datastax.powertools.missioncontrol.SSHResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.StartupEvent;
@@ -23,6 +24,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -30,6 +32,8 @@ import java.util.concurrent.*;
 public class LanderResource {
 
     private static final Logger logger = Logger.getLogger(LanderResource.class);
+
+    private ObjectMapper mapper = new ObjectMapper();
 
     ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
 
@@ -226,54 +230,46 @@ public class LanderResource {
 
         @Override
         public void write(OutputStream outputStream) throws IOException, WebApplicationException {
-           ArrayList<CompletableFuture<ByteArrayOutputStream>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName);
+            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName);
             Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream));
 
-            // TODO - figure out a way to get this to work without sleeping at the beginning
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            int targetCount = missionControlManager.getStages(missionName);
+            while(outputStreamFutureList.size() < targetCount) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
 
-            for (CompletableFuture<ByteArrayOutputStream> outputStreamFuture : outputStreamFutureList) {
-                try {
-                    outputStreamFuture.thenApplyAsync(os -> {
+            AtomicInteger completedCount = new AtomicInteger(0);
+
+            for (CompletableFuture<SSHResponse> sshResponseFuture: outputStreamFutureList) {
+                sshResponseFuture.thenApply(sshResponse -> {
+                    String sshResponseString = null;
+                    synchronized (writer) {
                         try {
-                            writer.write(os.toString());
+                            sshResponseString = mapper.writeValueAsString(sshResponse);
+                            writer.write(sshResponseString);
                             writer.write("\n\n");
                             writer.flush();
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
-                        logger.warn("writing sshresult to the stream: " + os.toString());
-                        /*
-                        byte[] byteArray = os.toByteArray();
-                        try {
-                            outputStream.write(os.toByteArray());
-                            outputStream.flush();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                         */
-                        return os;
-                    });
-                    outputStreamFuture.get();
+                    }
+                    logger.warn("writing sshresult to the stream: " + sshResponseString);
+                    completedCount.getAndIncrement();
 
+                    return sshResponseString;
+                });
+            }
+
+            while (completedCount.get() < targetCount)
+                try {
+                    Thread.sleep(100);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
-                } catch (ExecutionException e) {
-                    e.printStackTrace();
                 }
-
-            }
-
-            // TODO - figure out a way to get this to work without sleeping at the end
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
         }
     }
 

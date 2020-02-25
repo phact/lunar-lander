@@ -9,7 +9,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import com.datastax.powertools.api.LanderSequence;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jcraft.jsch.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -29,7 +28,6 @@ import java.security.Security;
 @ApplicationScoped
 public class MissionControlManager {
 
-    private ObjectMapper mapper = new ObjectMapper();
     private static Logger logger = LoggerFactory.getLogger(MissionControlManager.class);
     Map<String, LanderMission> missions = new HashMap<String, LanderMission>();
     private List<CassandraNode> cluster;
@@ -60,7 +58,11 @@ public class MissionControlManager {
         logger.info(String.format("Attempting to set ipType for ssh"));
         EnumSet.allOf(CassandraIpType.class)
                 .forEach(ipType -> tryToSetIpType(privateKey,sshUser,port,ipType,node));
-        logger.info(String.format("ipType is i%S", this.selectedIpType));
+        if (this.selectedIpType == null){
+            logger.error("Could not connect to any address, make sure the contact points are accessible on the network");
+            throw new RuntimeException();
+        }
+        logger.info(String.format("ipType is %S", this.selectedIpType));
     }
 
     private void tryToSetIpType(String privateKey, String sshUser, int port, CassandraIpType ipType, CassandraNode node) {
@@ -266,6 +268,7 @@ public class MissionControlManager {
             ((ChannelExec) channel).setErrStream(null);
 
             logger.info("attempting command: " + command + "on host: "+host);
+            Date start = new Date();
             channel.connect();
             InputStream in = channel.getInputStream();
             InputStream errIn = ((ChannelExec) channel).getErrStream();
@@ -310,6 +313,8 @@ public class MissionControlManager {
             String stdout = stdoutBuilder.toString();
             String stderr = stderrBuilder.toString();
 
+            Date end = new Date();
+
             int exitStatus = channel.getExitStatus();
 
             if (exitStatus != 0){
@@ -317,7 +322,7 @@ public class MissionControlManager {
                 logger.warn(String.format("failed with exit status %s",exitStatus));
                 logger.warn(stdout);
             }
-            return new SSHResponse(command, host, stdout, stderr, exitStatus);
+            return new SSHResponse(command, host, stdout, stderr, exitStatus, start, end);
 
         } catch (JSchException e) {
             logger.warn("Unable to execute command against " + host);
@@ -361,8 +366,8 @@ public class MissionControlManager {
         return missions;
     }
 
-    public ArrayList<CompletableFuture<ByteArrayOutputStream>> streamRollingDeployment(String missionName) {
-        ArrayList<CompletableFuture<ByteArrayOutputStream>>results = new ArrayList();
+    public ArrayList<CompletableFuture<SSHResponse>> streamRollingDeployment(String missionName) {
+        ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures = new ArrayList();
 
         Runnable task = () -> {
             if (missions.get(missionName) == null) {
@@ -371,22 +376,17 @@ public class MissionControlManager {
 
             LanderMission mission = missions.get(missionName);
 
-            streamRunRolling(mission, results);
+            streamRunRolling(mission, outputStreamFutures);
         };
 
         Thread thread = new Thread(task);
         //thread.setDaemon(true);
         thread.start();
-        /*
-        if (results.stream().filter(x -> x.getStatusCode() != 0).count() > 0){
-            throw new RuntimeException("execution of steps failed");
-        }
-        */
-        return results;
+        return outputStreamFutures;
     }
 
 
-    public void streamRunRolling(LanderMission mission, ArrayList<CompletableFuture<ByteArrayOutputStream>> responses){
+    public void streamRunRolling(LanderMission mission, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures){
         if (mission.getSequences().isEmpty()){
             throw new RuntimeException("Mission has no sequences");
         }
@@ -402,40 +402,37 @@ public class MissionControlManager {
             //TODO: think about if and how to do retries (idempotent flag on the sequence?)
             //TODO: use mustache to include node variables
             //TODO: stick success and failiure on the cluster rather than collecting
-            streamSSHAll(commands, cluster, responses);
+            streamSSHAll(commands, cluster, outputStreamFutures);
         }
     }
 
-    private void streamSSHAll(List<String> commands, List<CassandraNode> cluster, ArrayList<CompletableFuture<ByteArrayOutputStream>> responses) {
+    private void streamSSHAll(List<String> commands, List<CassandraNode> cluster, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures) {
         if (cluster == null){
             throw new RuntimeException("No cluster has been connected");
         }
-        for (String command : commands) {
-            for (CassandraNode node : cluster) {
+
+        for (CassandraNode node : cluster) {
+            CompletableFuture<SSHResponse> sshFuture = new CompletableFuture<>().supplyAsync(() -> {
+                return null;
+            });
+            for (String command : commands) {
                 //TODO: allow optional usage of listen address for ssh
-                CompletableFuture<ByteArrayOutputStream> outputStreamFuture = CompletableFuture.supplyAsync(() -> {
-                    ByteArrayOutputStream response = new ByteArrayOutputStream();
-                    try {
-                        byte[] sshCommandByteArray = mapper.writeValueAsBytes(ssh(
-                                command,
-                                node.getBroadcastAddress().get().
-                                        toString().split(":")[0].
-                                        replaceAll("/", "")
-                                )
-                        );
-                        response.write(sshCommandByteArray);
-                        response.write("\n\n".getBytes("UTF8"));
-                        response.flush();
-                    } catch (JsonProcessingException e) {
-                        e.printStackTrace();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                sshFuture = sshFuture.thenApply((response) -> {
+                    response = ssh(
+                            command,
+                            node.getBroadcastAddress().get().
+                                    toString().split(":")[0].
+                                    replaceAll("/", "")
+                    );
                     return response;
                 });
-                responses.add(outputStreamFuture);
-           }
+
+                //outputStreamFutures.add(outputStreamFuture);
+                outputStreamFutures.add(sshFuture);
+            }
+
         }
+
         /*
             responses.add(CompletableFuture.supplyAsync(() -> {
                 logger.warn("waiting now ");
@@ -455,5 +452,11 @@ public class MissionControlManager {
             }));
 
          */
+    }
+
+    public int getStages(String missionName) {
+        //TODO: change this based on parallelism
+        return cluster.size() * getSequencesFromMission(missionName).stream().map(x -> x.getCommands().size()).reduce(0, (a,b)-> a+b);
+        //return cluster.size();
     }
 }
