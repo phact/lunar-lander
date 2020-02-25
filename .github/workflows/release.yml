@@ -7,8 +7,8 @@ on:
 name: Release
 
 jobs:
-  build:
-    name: Upload Release Asset
+  linux-build:
+    name: Linux Build
     runs-on: ubuntu-latest
     steps:
 
@@ -47,4 +47,46 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: lunar-lander-1.0.0-SNAPSHOT-runner
-          asset_name: lunar-lander-1.0.0-SNAPSHOT-runner
+          asset_name: lunar-lander-1.0.0-SNAPSHOT-runner-linux
+
+  osx-build:
+    name: Darwin Build
+    runs-on: macos-latest
+    steps:
+
+      - uses: actions/checkout@v2
+      - name: Pull a GRAALVM JDK
+        run: wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-19.3.1/graalvm-ce-java11-darwin-amd64-19.3.1.tar.gz
+      - name: Setup Java JDK
+        uses: actions/setup-java@v1.3.0
+        with:
+          java-version: 13
+          java-package: jdk
+          # Path to where the compressed JDK is located. The path could be in your source repository or a local path on the agent.
+          jdkFile: graalvm-ce-java11-darwin-amd64-19.3.1.tar.gz
+      - name: echo JAVA_HOME
+        run: echo $JAVA_HOME
+      - name: install native-image
+        run: /opt/hostedtoolcache/jdk/13.0.0/x64/bin/gu install native-image
+      - name: Build with Maven
+        run: mvn clean package -DskipTests -Pnative
+        
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: lunar-lander-1.0.0-SNAPSHOT-runner
+          asset_name: lunar-lander-1.0.0-SNAPSHOT-runner-darwin
