@@ -1,3 +1,4 @@
+
 name: Java CI
 
 on: [push]
@@ -19,6 +20,10 @@ jobs:
         java-package: jdk
         # Path to where the compressed JDK is located. The path could be in your source repository or a local path on the agent.
         jdkFile: graalvm-ce-java11-linux-amd64-19.3.1.tar.gz
-
-    - name: Build with Maven
-      run: mvn clean package -DskipTests -Pnative
+      
+    - name: echo JAVA_HOME
+      run: echo JAVA_HOME 
+      
+      
+#    - name: Build with Maven
+#      run: mvn clean package -DskipTests -Pnative
