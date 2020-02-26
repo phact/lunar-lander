@@ -13,6 +13,10 @@ public class LanderSequence {
 
     private List<String> commands;
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private ConcurrencyType concurrencyType;
+
+
     public String getExpectedResponse() {
         return expectedResponse;
     }
@@ -37,8 +41,19 @@ public class LanderSequence {
         return this.name;
     }
 
-    public enum SequenceType {
-        DEFAULT,
-        FIRE_AND_FORGET
+    public ConcurrencyType getConcurrencyType() {
+        return concurrencyType;
+    }
+
+    public void setConcurrencyType(ConcurrencyType concurrencyType) {
+        this.concurrencyType = concurrencyType;
+    }
+
+    // TODO: consider supporting node per rack, node per dc, rack per dc, rack per cluster?
+    public enum ConcurrencyType {
+        NODE,
+        RACK,
+        DC,
+        CLUSTER
     }
 }

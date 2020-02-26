@@ -190,20 +190,6 @@ public class MissionControlManager {
         return missionList;
     }
 
-    public List<SSHResponse> rollingDeployment(String missionName) {
-        if (missions.get(missionName) == null){
-            throw new RuntimeException("Mission does not exist");
-        }
-        LanderMission mission = missions.get(missionName);
-        List<SSHResponse> results = runRolling(mission);
-        /*
-        if (results.stream().filter(x -> x.getStatusCode() != 0).count() > 0){
-            throw new RuntimeException("execution of steps failed");
-        }
-        */
-        return results;
-    }
-
     public List<SSHResponse> canaryDeployment(String missionName) {
         if (missions.get(missionName) == null){
             throw new RuntimeException("Mission does not exist");
@@ -240,33 +226,9 @@ public class MissionControlManager {
         return responses;
     }
 
-    private List<SSHResponse> runRolling(LanderMission mission) {
-        if (mission.getSequences().isEmpty()){
-            throw new RuntimeException("Mission has no sequences");
-        }
-        List<LanderSequence> sequences = mission.getSequences();
-
-        List<SSHResponse> responses = new ArrayList<>();
-        for (LanderSequence sequence : sequences) {
-            logger.info("Attempting to run sequence: " + sequence.getName() + " mission " + mission.getMissionName());
-
-            List<String> commands = sequence.getCommands();
-
-            String expectedResponse = sequence.getExpectedResponse();
-
-            //TODO: think about if and how to do retries (idempotent flag on the sequence?)
-            //TODO: use mustache to include node variables
-            //TODO: stick success and failiure on the cluster rather than collecting
-            responses.addAll(sshAll(commands, cluster));
-        }
-        return responses;
-    }
-
-
     private boolean wait(List<String> commands, String expectedResponse, List<CassandraNode> cluster) {
         return true;
     }
-    //TODO: grow up, parallelize this, get a thread pool
     //Note: currently each command is a separate ssh session
     private List<SSHResponse> sshAll(List<String> commands, List<CassandraNode> cluster) {
         List<SSHResponse> responses = new ArrayList<>();
@@ -275,13 +237,10 @@ public class MissionControlManager {
         }
         for (String command : commands) {
             for (CassandraNode node : cluster) {
-                //TODO: allow optional usage of listen address for ssh
                 responses.add(
                         ssh(
                                 command,
-                                node.getBroadcastAddress().orElse(null).
-                                        toString().split(":")[0].
-                                        replaceAll("/","")
+                                getHostFromIpType(selectedIpType, node)
                         )
                 );
             }
@@ -375,10 +334,7 @@ public class MissionControlManager {
             throw new RuntimeException("Cluster not configured");
         }
         CassandraNode node = cluster.get(0);
-        //TODO: allow different address
-        String host = node.getBroadcastAddress().orElse(null).
-                toString().split(":")[0].
-                replaceAll("/","");
+        String host = getHostFromIpType(selectedIpType, node);
         String key = node.getPrivateKey();
         String user = node.getSshUser();
         SSHResponse response = ssh(command, host);
@@ -424,7 +380,7 @@ public class MissionControlManager {
         }
         List<LanderSequence> sequences = mission.getSequences();
 
-        CompletableFuture<SSHResponse> sshFuture = new CompletableFuture<>().supplyAsync(() -> {
+        CompletableFuture<SSHResponse> sequenceSSHFuture = new CompletableFuture<>().supplyAsync(() -> {
             return null;
         });
         for (LanderSequence sequence : sequences) {
@@ -433,58 +389,45 @@ public class MissionControlManager {
             List<String> commands = sequence.getCommands();
 
             String expectedResponse = sequence.getExpectedResponse();
+            LanderSequence.ConcurrencyType concurrencyType = sequence.getConcurrencyType();
 
             //TODO: think about if and how to do retries (idempotent flag on the sequence?)
             //TODO: use mustache to include node variables
             //TODO: stick success and failiure on the cluster rather than collecting
-            sshFuture = streamSSHAll(commands, cluster, outputStreamFutures, sshFuture, executor);
+            sequenceSSHFuture= streamSSHAll(commands, cluster, concurrencyType, outputStreamFutures, sequenceSSHFuture, executor);
         }
     }
 
-    private CompletableFuture<SSHResponse> streamSSHAll(List<String> commands, List<CassandraNode> cluster, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures, CompletableFuture<SSHResponse> sshFuture, Executor executor) {
+    private CompletableFuture<SSHResponse> streamSSHAll(
+            List<String> commands,
+            List<CassandraNode> cluster,
+            LanderSequence.ConcurrencyType concurrencyType,
+            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures,
+            CompletableFuture<SSHResponse> sequenceSSHFuture,
+            Executor executor
+    ) {
         if (cluster == null){
             throw new RuntimeException("No cluster has been connected");
         }
 
+        CompletableFuture<SSHResponse> commandSSHFuture;
         for (CassandraNode node : cluster) {
             for (String command : commands) {
-                //TODO: allow optional usage of listen address for ssh
-                sshFuture = sshFuture.thenApplyAsync((response) -> {
+                commandSSHFuture = sequenceSSHFuture.thenApplyAsync((response) -> {
                     response = ssh(
                             command,
-                            node.getBroadcastAddress().orElse(null).
-                                    toString().split(":")[0].
-                                    replaceAll("/", "")
+                            getHostFromIpType(selectedIpType, node)
                     );
                     return response;
                 }, executor);
 
                 //outputStreamFutures.add(outputStreamFuture);
-                outputStreamFutures.add(sshFuture);
+                outputStreamFutures.add(commandSSHFuture);
+                sequenceSSHFuture = commandSSHFuture;
             }
-
         }
 
-        /*
-            responses.add(CompletableFuture.supplyAsync(() -> {
-                logger.warn("waiting now ");
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                logger.warn("waited");
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                try {
-                    out.write("Testing".getBytes());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return out;
-            }));
-
-         */
-        return sshFuture;
+        return sequenceSSHFuture;
     }
 
     public int getStages(String missionName) {

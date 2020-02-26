@@ -210,18 +210,6 @@ public class LanderResource {
         }
     }
 
-    @Path("/rollingDeployment/{missionName}")
-    @GET
-    public Response rollingDeployment(@PathParam("missionName") String missionName){
-        logger.info("Initiating rolling deployment for mission " + missionName);
-        try {
-            return Response.ok(missionControlManager.rollingDeployment(missionName)).build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Response.serverError().entity(e.getMessage()).build();
-        }
-    }
-
     public class SSHResponseStreamingOutput implements StreamingOutput {
         private final String missionName;
 
