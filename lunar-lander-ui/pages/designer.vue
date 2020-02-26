@@ -12,7 +12,7 @@
       <logo />
     </div>
     </v-flex>
- 
+
      <v-card
         min-width="600px"
         width="100%"
@@ -28,7 +28,7 @@
         v-on:change="newType = 'Clone';getSequences();"
         outlined
       ></v-select>
- 
+
        <v-container fluid>
        <h4 v-if="missionName != null && missionName != ''">
          {{missionName}}
@@ -83,17 +83,33 @@
                       <v-list-item-content>Expected response:</v-list-item-content>
                       </v-col>
                       <v-col>
-                      <v-text-field 
+                      <v-text-field
                         class="align-end"
                         v-model="item.expectedResponse"
                         label="Expected response"
                       >{{ item.expectedResponse }}
                       </v-text-field>
                       </v-col>
-                      </v-text-field>
                     </v-list-item>
- 
-                    <v-list-item 
+                    <v-list-item>
+                      <v-col>
+                      <v-list-item-content>Concurrency Type:</v-list-item-content>
+                      </v-col>
+                      <v-col>
+                      <v-select
+                        :items="concurrencyTypes"
+                        label="Concurrency Type"
+                        v-model="item.concurrencyType"
+                        value="item.concurrencyType"
+                        outlined
+                      ></v-select>
+
+
+                      </v-col>
+                    </v-list-item>
+
+
+                    <v-list-item
                       v-for="(command, i) in item.commands"
                       v-bind:key="command"
                     >
@@ -103,9 +119,9 @@
                       <v-col>
                       <v-list-item-content class="align-end">{{ command }}</v-list-item-content>
 
-                        <v-icon 
-                          color="primary" 
-                          dark 
+                        <v-icon
+                          color="primary"
+                          dark
                           @click.stop="currentcommand=command; currenti=i; currentj=j; commandDialog = true"
                         >
                           mdi-code-braces-box
@@ -206,7 +222,7 @@
                   name="input-7-4"
                   :label="`Command ${currenti}`"
                   :value="currentcommand"
-                  @change="changeCommand({currenti}, {currentj}, {currentcommand})" 
+                  @change="changeCommand({currenti}, {currentj}, {currentcommand})"
                 ></v-textarea>
 
                 <v-data-table
@@ -218,7 +234,7 @@
                   hide-default-footer
                 ></v-data-table>
 
- 
+
               </v-card-text>
               <v-divider></v-divider>
               <v-card-actions>
@@ -244,18 +260,18 @@
               </v-card-text>
               <v-divider></v-divider>
               <v-card-actions>
-                <v-btn 
+                <v-btn
                   v-if="newType=='New'"
-                  color="blue darken-1" 
-                  text 
+                  color="blue darken-1"
+                  text
                   @click="missionDialog = false ; newMission();"
                 >
                   New
                 </v-btn>
-                <v-btn 
+                <v-btn
                   v-if="newType=='Clone'"
-                  color="blue darken-1" 
-                  text 
+                  color="blue darken-1"
+                  text
                   @click="missionDialog = false; cloneMission();"
                 >
                   Clone
@@ -280,9 +296,9 @@
               </v-card-text>
               <v-divider></v-divider>
               <v-card-actions>
-                <v-btn 
-                  color="blue darken-1" 
-                  text 
+                <v-btn
+                  color="blue darken-1"
+                  text
                   @click="importDialog = false ; importMissions();"
                 >
                   Import Missions
@@ -290,13 +306,13 @@
               </v-card-actions>
             </v-card>
           </v-dialog>
- 
- 
- 
-        </v-row>  
 
 
-        
+
+        </v-row>
+
+
+
       <v-btn v-if="sequences.length !== 0" v-on:click="saveMission()">Save Mission</v-btn>
       <v-btn v-if="sequences.length !== 0" v-on:click="deleteMission()">Delete Mission</v-btn>
       <v-btn v-on:click="missionDialog = true">{{newType}} Mission</v-btn>
@@ -318,6 +334,7 @@ export default {
       let data = {
           missionNames: ["puppies","kittens"],
           missionName: "",
+          concurrencyTypes: ["NODE","RACK","DC","CLUSTER"],
           sequences: [],
           expand: false,
           commandDialog: false,
@@ -345,12 +362,12 @@ export default {
                 })
 
       //this.$data.missionNames = data;
-      return { 
+      return {
           missionNames: data,
       };
- 
+
     },
- 
+
     head () {
       return {
         title: 'Lunar Lander',
@@ -422,14 +439,14 @@ export default {
         this.getMissionNames();
       }
     },
- 
- 
+
+
    async getSequences() {
       const data = await this.$axios.$get('/getSequences/' + this.missionName)
       if (!data.err) {
         this.$data.sequences = data;
       }
- 
+
     },
     async changeCommand(currenti,currentj, currentcommand) {
       this.$set(this.$data.sequences[currentj.currentj].commands, currenti.currenti, currentcommand.currentcommand)
@@ -439,7 +456,7 @@ export default {
       if (!data.err) {
         this.$data.commandResponse = data;
       }
- 
+
     },
     nextPage () {
       if (this.page + 1 <= this.numberOfPages) this.page += 1
@@ -455,7 +472,7 @@ export default {
       this.sequences = [];
       this.newType = "New";
     },
- 
+
   },
   computed: {
     numberOfPages () {
