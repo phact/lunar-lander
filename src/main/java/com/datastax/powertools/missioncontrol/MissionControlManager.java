@@ -354,7 +354,7 @@ public class MissionControlManager {
         return missions;
     }
 
-    public ArrayList<CompletableFuture<SSHResponse>> streamRollingDeployment(String missionName, Executor executor) {
+    public ArrayList<CompletableFuture<SSHResponse>> streamRollingDeployment(String missionName, Executor executor, Executor executorPool) {
         ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures = new ArrayList();
 
         Runnable task = () -> {
@@ -364,7 +364,7 @@ public class MissionControlManager {
 
             LanderMission mission = missions.get(missionName);
 
-            streamRunRolling(mission, outputStreamFutures, executor);
+            streamExecuteRollingDeployment(mission, outputStreamFutures, executor, executorPool);
         };
 
         Thread thread = new Thread(task);
@@ -374,7 +374,7 @@ public class MissionControlManager {
     }
 
 
-    public void streamRunRolling(LanderMission mission, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures, Executor executor){
+    public void streamExecuteRollingDeployment(LanderMission mission, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures, Executor executor, Executor executorPool){
         if (mission.getSequences().isEmpty()){
             throw new RuntimeException("Mission has no sequences");
         }
@@ -394,7 +394,7 @@ public class MissionControlManager {
             //TODO: think about if and how to do retries (idempotent flag on the sequence?)
             //TODO: use mustache to include node variables
             //TODO: stick success and failiure on the cluster rather than collecting
-            sequenceSSHFuture= streamSSHAll(commands, cluster, concurrencyType, outputStreamFutures, sequenceSSHFuture, executor);
+            sequenceSSHFuture= streamSSHAll(commands, cluster, concurrencyType, outputStreamFutures, sequenceSSHFuture, executor, executorPool);
         }
     }
 
@@ -404,29 +404,74 @@ public class MissionControlManager {
             LanderSequence.ConcurrencyType concurrencyType,
             ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures,
             CompletableFuture<SSHResponse> sequenceSSHFuture,
-            Executor executor
-    ) {
-        if (cluster == null){
+            Executor executor,
+            Executor executorPool) {
+        if (cluster == null) {
             throw new RuntimeException("No cluster has been connected");
         }
 
-        CompletableFuture<SSHResponse> commandSSHFuture;
-        for (CassandraNode node : cluster) {
-            for (String command : commands) {
-                commandSSHFuture = sequenceSSHFuture.thenApplyAsync((response) -> {
-                    response = ssh(
-                            command,
-                            getHostFromIpType(selectedIpType, node)
-                    );
-                    return response;
-                }, executor);
+        if (concurrencyType == LanderSequence.ConcurrencyType.NODE) {
+            CompletableFuture<SSHResponse> commandSSHFuture;
+            for (CassandraNode node : cluster) {
+                for (String command : commands) {
+                    commandSSHFuture = sequenceSSHFuture.thenApplyAsync((response) -> {
+                        return ssh(
+                                command,
+                                getHostFromIpType(selectedIpType, node)
+                        );
+                    }, executor);
 
-                //outputStreamFutures.add(outputStreamFuture);
-                outputStreamFutures.add(commandSSHFuture);
-                sequenceSSHFuture = commandSSHFuture;
+                    outputStreamFutures.add(commandSSHFuture);
+                    sequenceSSHFuture = commandSSHFuture;
+                }
             }
         }
+        else {
+            CompletableFuture<SSHResponse> commandSSHFuture = null;
+            ArrayList<CompletableFuture<SSHResponse>> futuresToBeCombined = new ArrayList<CompletableFuture<SSHResponse>>();
 
+            Map<Object, CompletableFuture<SSHResponse>> groupingFutureMap= new HashMap();
+            for (String command : commands) {
+                for (CassandraNode node : cluster) {
+                    Object grouping;
+                    switch (concurrencyType) {
+                       case CLUSTER:
+                            grouping = node;
+                            break;
+                        case RACK:
+                        case DC:
+                        default:
+                            throw new IllegalStateException("Unexpected concurrency type: " + concurrencyType);
+                    }
+                    if (groupingFutureMap.get(grouping) == null){
+                        CompletableFuture<SSHResponse> future = sequenceSSHFuture.thenApplyAsync((response) -> {
+                            return null;
+                        });
+                        groupingFutureMap.put(grouping, future);
+                    }
+                    commandSSHFuture = groupingFutureMap.get(grouping).thenApplyAsync((response) -> {
+                        return ssh(
+                                command,
+                                getHostFromIpType(selectedIpType, node)
+                        );
+                    }, executorPool);
+
+                    //outputStreamFutures.add(outputStreamFuture);
+                    futuresToBeCombined.add(commandSSHFuture);
+                    outputStreamFutures.add(commandSSHFuture);
+                    //sequenceSSHFuture = commandSSHFuture;
+
+                    groupingFutureMap.put(grouping, commandSSHFuture);
+                }
+            }
+
+            CompletableFuture<SSHResponse>[] futuresArray = futuresToBeCombined.toArray(new CompletableFuture[0]);
+            //TODO: find a better way to return CompletableFuture<SSHResponse> that doesn't involve this gnarly workaround of adding a noop thenApplyAsync
+            CompletableFuture<SSHResponse> combinedFuture
+                    = CompletableFuture.allOf(futuresArray).thenApplyAsync((response) -> null);
+            sequenceSSHFuture = combinedFuture;
+
+        }
         return sequenceSSHFuture;
     }
 

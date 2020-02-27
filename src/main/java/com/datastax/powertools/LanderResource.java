@@ -219,7 +219,7 @@ public class LanderResource {
 
         @Override
         public void write(OutputStream outputStream) throws IOException, WebApplicationException {
-            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName, executor);
+            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName, executor, executorPool);
             Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream));
 
             int targetCount = missionControlManager.getStages(missionName);

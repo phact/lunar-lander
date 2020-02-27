@@ -104,6 +104,8 @@ public class CassandraManager {
             cassandraNode.setListenAddress(node.getListenAddress());
             cassandraNode.setBroadcastAddress(node.getBroadcastAddress());
             cassandraNode.setBroadcastRpcAddress(node.getBroadcastRpcAddress());
+            cassandraNode.setDatacenter(node.getDatacenter());
+            cassandraNode.setRack(node.getRack());
             cassandraNodeList.add(cassandraNode);
         }
         return cassandraNodeList;

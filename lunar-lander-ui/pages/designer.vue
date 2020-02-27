@@ -334,7 +334,8 @@ export default {
       let data = {
           missionNames: ["puppies","kittens"],
           missionName: "",
-          concurrencyTypes: ["NODE","RACK","DC","CLUSTER"],
+          //concurrencyTypes: ["NODE","RACK","DC","CLUSTER"],
+          concurrencyTypes: ["NODE","CLUSTER"],
           sequences: [],
           expand: false,
           commandDialog: false,

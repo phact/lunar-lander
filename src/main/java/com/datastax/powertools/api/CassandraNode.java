@@ -10,6 +10,8 @@ public class CassandraNode {
     private Optional<InetSocketAddress> listenAddress;
     private String privateKey;
     private String sshUser;
+    private String datacenter;
+    private String rack;
 
     public void setPrivateKey(String privateKey) {
         this.privateKey = privateKey;
@@ -50,5 +52,21 @@ public class CassandraNode {
 
     public String getSshUser() {
         return sshUser;
+    }
+
+    public void setDatacenter(String datacenter) {
+        this.datacenter = datacenter;
+    }
+
+    public String getDatacenter() {
+        return datacenter;
+    }
+
+    public void setRack(String rack) {
+         this.rack = rack;
+    }
+
+    public String getRack() {
+        return rack;
     }
 }
