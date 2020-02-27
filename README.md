@@ -13,9 +13,23 @@ To help users tackle the diverse challenges of upgrading c* clusters, the tool:
 
 ## Design Concepts
 
-Users design, test, and execute missions.
+Users design, test, and deploy missions.
 
 Missions are composed of reusable sequences of bash shell commands.
+
+Missions can be deployed on clusters in a as canary deployments (one random node) or in as rolling deployments (the whole cluster where the concurrency is determined per sequence by the mission designer).
+
+### Concurrency
+
+Regardless of the Guarantees:
+
+ - The commands inside a sequence are always guaranteed to run sequentially on a host
+ - Multiple sequences are always guaranteed to run in order across all the hosts (i.e. no host will start sequence 2 until sequence 1 has completed on all hosts).
+
+For each sequence, one of the following Concurrency Types can be selected:
+
+ - NODE - the sequence will get run node by node
+ - CLUSTER - the sequence will get run in parallel for all the nodes in the cluster
 
 ## User
 
