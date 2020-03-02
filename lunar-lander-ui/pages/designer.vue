@@ -78,6 +78,8 @@
                       <v-list-item-content class="align-end">{{ item.name }}</v-list-item-content>
                       </v-col>
                     </v-list-item>
+
+<!--
                     <v-list-item>
                       <v-col>
                       <v-list-item-content>Expected response:</v-list-item-content>
@@ -91,6 +93,7 @@
                       </v-text-field>
                       </v-col>
                     </v-list-item>
+-->
                     <v-list-item>
                       <v-col>
                       <v-list-item-content>Concurrency Type:</v-list-item-content>
@@ -327,7 +330,7 @@
 </template>
 <script>
 import Logo from '~/components/Logo.vue'
-
+import { mapMutations } from 'vuex'
 
 export default {
     data: () => {
@@ -377,7 +380,13 @@ export default {
       }
     },
    methods: {
-    //TODO: snackbar and spinner on requests
+    mutateSnack: function (snack) {
+      this.setSnack(snack)
+      //this.$router.push('/')
+    },
+    ...mapMutations({
+      setSnack: 'snackbar/setSnack'
+    }),
     async getMissionNames(){
       let data = await this.$axios.$get("/missionNames")
                 .then(res => {
@@ -412,6 +421,7 @@ export default {
       })
       if (!data.err) {
         //this.$data.cassandraNodes = data;
+        this.mutateSnack("Mission - "+this.missionName+" saved");
       }
     },
     async deleteMission() {
@@ -419,6 +429,7 @@ export default {
         missionName: this.missionName
       })
       if (!data.err) {
+        this.mutateSnack("Mission - "+this.missionName+" deleted");
         this.$data.missionNames.splice((this.$data.missionNames.indexOf(this.missionName)),1)
         this.$data.missionName="";
         this.$data.sequences = [];
@@ -429,8 +440,12 @@ export default {
     async exportMissions() {
       const data = await this.$axios.$get('/missions/')
       if (!data.err) {
-        alert(JSON.stringify(data))
         console.log(JSON.stringify(data))
+        var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+        var downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href",     dataStr     );
+        downloadAnchorNode.setAttribute("download", "missions-export.json");
+        downloadAnchorNode.click();
       }
     },
 
@@ -438,6 +453,7 @@ export default {
       const data = await this.$axios.$put('/missions/', JSON.parse(this.missionsToImport))
       if (!data.err) {
         this.getMissionNames();
+        this.mutateSnack("Missions imported");
       }
     },
 
@@ -453,9 +469,12 @@ export default {
       this.$set(this.$data.sequences[currentj.currentj].commands, currenti.currenti, currentcommand.currentcommand)
     },
     async executeCommand(currentcommand) {
+      this.mutateSnack("Command submitted");
+
       const data = await this.$axios.$get('/executeCommand/' + encodeURIComponent(currentcommand.currentcommand))
       if (!data.err) {
         this.$data.commandResponse = data;
+        this.mutateSnack("Command completed");
       }
 
     },

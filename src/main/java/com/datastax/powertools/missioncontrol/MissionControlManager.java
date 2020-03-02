@@ -1,5 +1,6 @@
 package com.datastax.powertools.missioncontrol;
 
+import com.datastax.powertools.LanderResource;
 import com.datastax.powertools.api.CassandraNode;
 import com.datastax.powertools.api.LanderMission;
 
@@ -169,7 +170,7 @@ public class MissionControlManager {
         logger.debug("session created.");
 
         //speed up timeout
-        session.setTimeout(5000);
+        session.setTimeout(7000);
 
         // We can't do host checking against new boxes constantly
         session.setConfig("StrictHostKeyChecking", "no");
@@ -190,63 +191,48 @@ public class MissionControlManager {
         return missionList;
     }
 
-    public List<SSHResponse> canaryDeployment(String missionName) {
+    public ArrayList<CompletableFuture<SSHResponse>> canaryDeployment(String missionName, Executor executor, Executor executorPool) {
+        ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures = new ArrayList();
+
         if (missions.get(missionName) == null){
             throw new RuntimeException("Mission does not exist");
         }
         LanderMission mission = missions.get(missionName);
-        List<SSHResponse> results = runCanary(mission);
+        runCanary(mission, outputStreamFutures, executor, executorPool);
         /*
         if (results.stream().filter(x -> x.getStatusCode() != 0).count() > 0){
             throw new RuntimeException("execution of steps failed");
         }
         */
-        return results;
+        return outputStreamFutures;
     }
 
-    private List<SSHResponse> runCanary(LanderMission mission) {
+    public void runCanary(LanderMission mission, ArrayList<CompletableFuture<SSHResponse>> outputStreamFutures, Executor executor, Executor executorPool) {
         if (mission.getSequences().isEmpty()){
             throw new RuntimeException("Mission has no sequences");
         }
         List<LanderSequence> sequences = mission.getSequences();
 
-        List<SSHResponse> responses = new ArrayList<>();
+
+        CompletableFuture<SSHResponse> sequenceSSHFuture = new CompletableFuture<>().supplyAsync(() -> {
+            return null;
+        });
+
         for (LanderSequence sequence : sequences) {
             logger.info("Attempting to run sequence: " + sequence.getName() + " mission " + mission.getMissionName());
 
             List<String> commands = sequence.getCommands();
 
             String expectedResponse = sequence.getExpectedResponse();
+            LanderSequence.ConcurrencyType concurrencyType = sequence.getConcurrencyType();
 
             //TODO: think about if and how to do retries (idempotent flag on the sequence?)
             //TODO: use mustache to include node variables
             //TODO: stick success and failiure on the cluster rather than collecting
-            responses.addAll(sshAll(commands, cluster.subList(0,1)));
+            sequenceSSHFuture= streamSSHAll(commands,  cluster.subList(0,1), concurrencyType, outputStreamFutures, sequenceSSHFuture, executor, executorPool);
         }
-        return responses;
     }
 
-    private boolean wait(List<String> commands, String expectedResponse, List<CassandraNode> cluster) {
-        return true;
-    }
-    //Note: currently each command is a separate ssh session
-    private List<SSHResponse> sshAll(List<String> commands, List<CassandraNode> cluster) {
-        List<SSHResponse> responses = new ArrayList<>();
-        if (cluster == null){
-            throw new RuntimeException("No cluster has been connected");
-        }
-        for (String command : commands) {
-            for (CassandraNode node : cluster) {
-                responses.add(
-                        ssh(
-                                command,
-                                getHostFromIpType(selectedIpType, node)
-                        )
-                );
-            }
-        }
-        return responses;
-    }
 
     private SSHResponse ssh(String command, String host) {
         try{
@@ -258,7 +244,7 @@ public class MissionControlManager {
             channel.setInputStream(null);
             ((ChannelExec) channel).setErrStream(null);
 
-            logger.info("attempting command: " + command + "on host: "+host);
+            logger.info("attempting command: " + command + " on host: "+host);
             Date start = new Date();
             channel.connect();
             InputStream in = channel.getInputStream();
@@ -410,6 +396,10 @@ public class MissionControlManager {
             throw new RuntimeException("No cluster has been connected");
         }
 
+        if (concurrencyType == null){
+            concurrencyType = LanderSequence.ConcurrencyType.NODE;
+        }
+
         if (concurrencyType == LanderSequence.ConcurrencyType.NODE) {
             CompletableFuture<SSHResponse> commandSSHFuture;
             for (CassandraNode node : cluster) {
@@ -434,7 +424,7 @@ public class MissionControlManager {
             for (String command : commands) {
                 for (CassandraNode node : cluster) {
                     Object grouping;
-                    switch (concurrencyType) {
+                   switch (concurrencyType) {
                        case CLUSTER:
                             grouping = node;
                             break;
@@ -475,9 +465,16 @@ public class MissionControlManager {
         return sequenceSSHFuture;
     }
 
-    public int getStages(String missionName) {
-        //TODO: change this based on parallelism
-        return cluster.size() * getSequencesFromMission(missionName).stream().map(x -> x.getCommands().size()).reduce(0, (a,b)-> a+b);
+    public int getStages(String missionName, LanderResource.DeploymentType deploymentType) {
+        //TODO: change this based on parallelism?
+        switch (deploymentType) {
+            case CANARY:
+                return getSequencesFromMission(missionName).stream().map(x -> x.getCommands().size()).reduce(0, (a, b) -> a + b);
+            case ROLLING:
+                return cluster.size() * getSequencesFromMission(missionName).stream().map(x -> x.getCommands().size()).reduce(0, (a, b) -> a + b);
+            default:
+                throw new IllegalStateException("Unexpected deployment type: " + deploymentType);
+        }
         //return cluster.size();
     }
 }

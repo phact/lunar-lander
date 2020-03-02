@@ -5,15 +5,10 @@ import com.datastax.powertools.docker.DockerHelper;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import io.restassured.response.ResponseBody;
-import io.restassured.response.ValidatableResponse;
 import org.junit.jupiter.api.*;
 
-import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
@@ -33,12 +28,13 @@ public class ConnectResourceTest {
         CassandraClusterConfiguration cassandraClusterConf = new CassandraClusterConfiguration();
         cassandraClusterConf.setContactPoints("localhost");
         Response response = given()
+                .log().all()
                 .contentType(ContentType.JSON)
                 .body(cassandraClusterConf)
                 .when().post("/connect");
 
+        response.then().log().all().statusCode(is(200));
 
-        response.then().statusCode(is(200));
     }
 
     @AfterAll

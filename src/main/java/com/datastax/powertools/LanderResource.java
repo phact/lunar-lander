@@ -8,6 +8,7 @@ import com.datastax.powertools.cassandra.CassandraClusterConfiguration;
 import com.datastax.powertools.cassandra.CassandraManager;
 import com.datastax.powertools.missioncontrol.MissionControlManager;
 import com.datastax.powertools.missioncontrol.SSHResponse;
+import com.datastax.powertools.missioncontrol.SSHResponseStreamingOutput;
 import com.datastax.powertools.util.ThreadFactoryWithName;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,8 +34,6 @@ public class LanderResource {
 
     private static final Logger logger = Logger.getLogger(LanderResource.class);
 
-    private ObjectMapper mapper = new ObjectMapper();
-
     ThreadPoolExecutor executorPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
     Executor executor = Executors.newSingleThreadExecutor(new ThreadFactoryWithName("lander-worker"));
 
@@ -46,6 +45,11 @@ public class LanderResource {
 
     @Inject
     CassandraManager cassandraManager;
+
+    public enum DeploymentType {
+        CANARY,
+        ROLLING
+    }
 
     void onStart(@Observes StartupEvent ev) {               //
         logger.info("The application is starting...");
@@ -210,57 +214,6 @@ public class LanderResource {
         }
     }
 
-    public class SSHResponseStreamingOutput implements StreamingOutput {
-        private final String missionName;
-
-        public SSHResponseStreamingOutput(String missionName) {
-            this.missionName = missionName;
-        }
-
-        @Override
-        public void write(OutputStream outputStream) throws IOException, WebApplicationException {
-            ArrayList<CompletableFuture<SSHResponse>> outputStreamFutureList = missionControlManager.streamRollingDeployment(missionName, executor, executorPool);
-            Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream));
-
-            int targetCount = missionControlManager.getStages(missionName);
-            while(outputStreamFutureList.size() < targetCount) {
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            AtomicInteger completedCount = new AtomicInteger(0);
-
-            for (CompletableFuture<SSHResponse> sshResponseFuture: outputStreamFutureList) {
-                sshResponseFuture.thenApplyAsync(sshResponse -> {
-                    String sshResponseString = null;
-                    synchronized (writer) {
-                        try {
-                            sshResponseString = mapper.writeValueAsString(sshResponse);
-                            writer.write(sshResponseString);
-                            writer.write("\n\n");
-                            writer.flush();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    logger.warn("writing sshresult to the stream: " + sshResponseString);
-                    completedCount.getAndIncrement();
-
-                    return sshResponseString;
-                }, executor);
-            }
-
-            while (completedCount.get() < targetCount)
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-        }
-    }
 
 
     @Path("/streamRollingDeployment/{missionName}")
@@ -270,49 +223,22 @@ public class LanderResource {
         logger.info("Initiating streaming rolling deployment for mission " + missionName);
 
         return CompletableFuture.supplyAsync(() -> {
-            StreamingOutput out = new SSHResponseStreamingOutput(missionName);
+            StreamingOutput out = new SSHResponseStreamingOutput(missionName, missionControlManager, DeploymentType.ROLLING);
             return (Response.ok().entity(out).build());
         }, executorPool);
-        /*
-        Thread thread = new Thread() {
-            public void run() {
-                logger.warn("running thread");
-                try {
-                    out.write(BufferedOutputStream.nullOutputStream());
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-        };
-
-        thread.setDaemon(true);
-        thread.start();
-         */
     }
 
-
-    @Path("/canaryDeployment/{missionName}")
-    @GET
-    public Response canaryDeployment(@PathParam("missionName") String missionName){
-        logger.info("Initiating canary deployment for mission " + missionName);
-        try {
-            return Response.ok(missionControlManager.canaryDeployment(missionName)).build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Response.serverError().entity(e.getMessage()).build();
-        }
-    }
 
     @Path("/streamCanaryDeployment/{missionName}")
     @GET
-    public Response streamCanaryDeployment(@PathParam("missionName") String missionName){
+    public CompletionStage<Response> streamCanaryDeployment(@PathParam("missionName") String missionName){
         logger.info("Initiating canary deployment for mission " + missionName);
-        try {
-            return Response.ok(missionControlManager.canaryDeployment(missionName)).build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Response.serverError().entity(e.getMessage()).build();
-        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            StreamingOutput out = new SSHResponseStreamingOutput(missionName, missionControlManager, DeploymentType.CANARY);
+            return (Response.ok().entity(out).build());
+        }, executorPool);
+//            return Response.ok(missionControlManager.canaryDeployment(missionName, executor, executorPool)).build();
     }
 
 

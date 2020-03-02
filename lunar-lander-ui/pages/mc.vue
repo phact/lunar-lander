@@ -169,10 +169,9 @@
       </v-row>
 
       <v-row>
-      <!-- <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="rollingDeployment()">Rolling Deployment</v-btn> -->
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="streamRollingDeployment()">Rolling Deployment</v-btn>
       <v-btn v-if="cassandraNodes.length > 0 && missionName != ''" v-on:click="canaryDeployment()">Canary Deployment</v-btn>
-      <!-- <<v-btn v-on:click="stream()">Stream</v-btn> -->
+      <v-btn v-if="deploymentCompleted" v-on:click="downloadSequenceResults()">Download Sequence Results</v-btn>
       </v-row>
 
       <v-data-table
@@ -201,7 +200,8 @@ import requestsMixin from '~/mixins/requests.js'
 
 
 export default {
-    mixins: [requestsMixin],
+   loading: false,
+   mixins: [requestsMixin],
    data: () => {
       let data = {
           missionNames: ["puppies","kittens"],
@@ -212,6 +212,7 @@ export default {
           privateKey: "",
           missionName: "",
           expand: false,
+          deploymentCompleted: false,
           page: 1,
           itemsPerPage: 10,
           itemsPerPageArray: [10, 20, 50]
@@ -263,28 +264,25 @@ export default {
       }).catch(function (error) {
         return {err: error.response.data}
       })
-      if (!data.err) {
+      if (data.err == undefined) {
         //this.$data.cassandraNodes = data;
         this.setCassandraNodes(data);
         this.mutateSnack("Connection created");
         this.$forceUpdate();
       }else {
-        this.mutateSnack(data.err);
+        if (! data.err){
+          this.mutateSnack("ERROR");
+        }else{
+          this.mutateSnack("ERROR: "+ data.err);
+        }
       }
     },
-    async rollingDeployment() {
-      const data = await this.$axios.$get('/rollingDeployment/' + this.missionName)
-      if (!data.err) {
-        this.$data.sequenceResults = data;
-      }
- 
-    },
-    async canaryDeployment() {
-      const data = await this.$axios.$get('/canaryDeployment/' + this.missionName)
-      if (!data.err) {
-        this.$data.sequenceResults = data;
-      }
- 
+    downloadSequenceResults(){
+      var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.sequenceResults));
+      var downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href",     dataStr     );
+      downloadAnchorNode.setAttribute("download", "missions-export.json");
+      downloadAnchorNode.click();
     },
     nextPage () {
       if (this.page + 1 <= this.numberOfPages) this.page += 1
@@ -295,14 +293,29 @@ export default {
     updateItemsPerPage (number) {
       this.itemsPerPage = number
     },
-    streamRollingDeployment (){
+    async canaryDeployment() {
+        this.$data.deploymentCompleted = false;
+        this.mutateSnack("Canary deploy- " + this.missionName +" started");
+        this.$nuxt.$loading.start();
         this.$data.sequenceResults = [];
+ 
         this.streamingRequest({
-            url: this.$axios.defaults.baseURL + 'streamRollingDeployment/' + this.missionName,
+            url: this.$axios.defaults.baseURL + 'streamCanaryDeployment/' + this.missionName,
             error: function(response){
                 console.log(response);
             },
             success: function(response, vueComponent, field){
+
+                if (response.status == 200){
+                    console.log("started streaming")
+                    vueComponent.mutateSnack("Streaming - " + vueComponent.missionName);
+                }else{
+                    console.log("Canary Deployment Failed")
+                    vueComponent.mutateSnack("Canary Depoyment - " + vueComponent.missionName + " failed. Is the cluster connected?");
+                    return;
+                }
+
+
                 var reader = response.body.getReader();
                 const STATUS_DELIMITER = "\n\n";
 
@@ -345,6 +358,92 @@ export default {
                         if (result.done) {
                             console.log("done")
                             console.log(JSON.stringify(vueComponent.$data[field]));
+                            vueComponent.$nuxt.$loading.finish();
+                            vueComponent.$data.deploymentCompleted = true;
+                            vueComponent.mutateSnack("Streaming deploy- " + vueComponent.missionName +" completed");
+                            return;
+                        } else {
+                            return readChunk(reader, i, field, vueComponent);
+                        }
+                    });
+     
+                }
+
+                readChunk(reader,  0, field, vueComponent);
+            },
+            method: "GET",
+            vueComponent: this,
+            field: "sequenceResults"
+        })
+ 
+    },
+    streamRollingDeployment (){
+        this.$data.deploymentCompleted = false;
+        this.mutateSnack("Rolling deploy- " + this.missionName +" started");
+        this.$nuxt.$loading.start();
+        this.$data.sequenceResults = [];
+        this.streamingRequest({
+            url: this.$axios.defaults.baseURL + 'streamRollingDeployment/' + this.missionName,
+            error: function(response){
+                console.log(response);
+            },
+            success: function(response, vueComponent, field){
+
+                if (response.status == 200){
+                    console.log("started streaming")
+                    vueComponent.mutateSnack("Streaming - " + vueComponent.missionName);
+                }else{
+                    console.log("Rolling Deployment Failed")
+                    vueComponent.mutateSnack("Rolling Depoyment - " + vueComponent.missionName + " failed. Is the cluster connected?");
+                    return;
+                }
+
+                var reader = response.body.getReader();
+                const STATUS_DELIMITER = "\n\n";
+ 
+                let readChunk  = function(reader, i, field, vueComponent){
+
+
+                    reader.read().then(function(result){
+                        var decoder = new TextDecoder();
+                        var chunk = decoder.decode(result.value || new Uint8Array, {stream: !result.done});
+                        chunk.split("\n").forEach((chunkedLine) => {
+                            if (chunkedLine.trim().length != 0){
+                                var chunkObject = {
+                                    "index" : i,
+                                    "msg": chunkedLine,
+                                }
+                                i = i + 1;
+
+                                //console.log(chunkedLine);
+
+                                if (chunkedLine.indexOf(STATUS_DELIMITER) != -1){
+                                    status = chunkedLine.substr(12);
+                                    chunkObject.msg = "exited with Status code " + status;
+                                    if (status == 0){
+                                        console.log(command + " Succeeded", "Success")
+                                    }
+                                    else if (status == 1){
+                                        console.log(command + " Not Found", "Error")
+                                    }
+                                    else {
+                                        console.log(command + " Failed", "Error")
+                                    }
+                                }
+
+                                vueComponent.$data[field].unshift(JSON.parse(chunkObject.msg));
+
+                                vueComponent.$forceUpdate();
+
+                            }
+                        });
+
+                        if (result.done) {
+                            console.log("done")
+                            console.log(JSON.stringify(vueComponent.$data[field]));
+                            vueComponent.$nuxt.$loading.finish();
+                            vueComponent.$data.deploymentCompleted = true;
+                            vueComponent.mutateSnack("Rolling deploy- " + vueComponent.missionName +" completed");
                             return;
                         } else {
                             return readChunk(reader, i, field, vueComponent);
@@ -355,12 +454,7 @@ export default {
 
                 readChunk(reader,  0, field, vueComponent);
 
-                if (response.status == 200){
-                    console.log("started streaming")
-                }else{
-                    console.log("Launch Command Failed")
-                }
-            },
+           },
             method: "GET",
             vueComponent: this,
             field: "sequenceResults"
