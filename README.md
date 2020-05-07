@@ -39,7 +39,7 @@ Download the latest release from https://github.com/phact/lunar-lander/releases
 
 To run in dev (including hot loading for both java and javascript) run:
 
-    ./mvnw compile quarkus
+    ./mvnw compile quarkus:dev
 
 and
 
